@@ -149,8 +149,9 @@ app.post(`${BASE_PATH}/upload`, upload.single('site'), (req, res) => {
     fs.mkdirSync(siteDir, { recursive: true });
 
     if (isHtml) {
-      // Single HTML file — save as index.html
-      fs.renameSync(req.file.path, path.join(siteDir, 'index.html'));
+      // Single HTML file — save as index.html (copyFile + unlink to support cross-device moves)
+      fs.copyFileSync(req.file.path, path.join(siteDir, 'index.html'));
+      fs.unlinkSync(req.file.path);
     } else {
       // ZIP file — extract
       const zip = new AdmZip(req.file.path);
@@ -189,6 +190,7 @@ app.post(`${BASE_PATH}/upload`, upload.single('site'), (req, res) => {
 
     res.json({ success: true, url, slug });
   } catch (err) {
+    console.error('Upload error:', err);
     // Clean up on failure
     if (fs.existsSync(siteDir)) {
       fs.rmSync(siteDir, { recursive: true, force: true });
