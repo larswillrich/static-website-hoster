@@ -3,7 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Drop & Host</title>
+  <title>HostMyPage — Instant Web Hosting</title>
+  <meta name="description" content="Drop an HTML file or ZIP and get an instant shareable link. Free, fast, no signup required.">
+
+  <!-- Open Graph / WhatsApp / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://host-my-page.com/">
+  <meta property="og:title" content="HostMyPage — Instant Web Hosting">
+  <meta property="og:description" content="Drop a file. Get a link. Instantly. Free static website hosting with zero setup.">
+  <meta property="og:image" content="https://host-my-page.com/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:site_name" content="HostMyPage">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="HostMyPage — Instant Web Hosting">
+  <meta name="twitter:description" content="Drop a file. Get a link. Instantly. Free static website hosting with zero setup.">
+  <meta name="twitter:image" content="https://host-my-page.com/og-image.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <meta name="theme-color" content="#e8793a">
+
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -463,6 +486,15 @@
       color: var(--text-dim);
     }
 
+    .footer-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    .footer-link:hover {
+      color: var(--accent);
+    }
+
     /* Responsive */
     @media (max-width: 480px) {
       .card { padding: 18px; }
@@ -476,13 +508,15 @@
     <div class="header">
       <div class="logo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
-          <path d="M12 12v9"/>
-          <path d="m16 16-4-4-4 4"/>
+          <path d="M4 2h10l5 5v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+          <path d="M14 2v4a1 1 0 0 0 1 1h4"/>
+          <circle cx="16" cy="16" r="5.5" fill="#1a1a20" stroke="none"/>
+          <path d="M16 13.5v5" stroke="#e8793a" stroke-width="1.8"/>
+          <path d="M14 15.5l2-2 2 2" stroke="#e8793a" stroke-width="1.8"/>
         </svg>
       </div>
-      <h1>Drop & Host</h1>
-      <p class="subtitle">Drop an HTML file or ZIP and get an instant link</p>
+      <h1>HostMyPage</h1>
+      <p class="subtitle">Drop a file. Get a link. Instantly.</p>
     </div>
 
     <div class="card">
@@ -553,7 +587,7 @@
       </div>
     </div>
 
-    <p class="footer"><span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span></p>
+    <p class="footer"><span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span> &middot; <a href="./admin" class="footer-link">Manage sites</a></p>
   </div>
 
   <script>
