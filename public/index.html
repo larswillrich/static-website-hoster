@@ -658,7 +658,7 @@
       xhr.addEventListener('error', () => showError('Network error. Please try again.'));
       xhr.addEventListener('timeout', () => showError('Upload timed out. Please try again.'));
 
-      xhr.open('POST', '/upload');
+      xhr.open('POST', './upload');
       xhr.timeout = 120000;
       xhr.send(formData);
     }

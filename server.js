@@ -7,6 +7,7 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, ''); // e.g. "/staticwebsite"
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
@@ -100,7 +101,7 @@ app.post('/upload', upload.single('site'), (req, res) => {
     // Build the URL
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.get('host');
-    const url = `${protocol}://${host}/sites/${slug}/`;
+    const url = `${protocol}://${host}${BASE_PATH}/sites/${slug}/`;
 
     res.json({ success: true, url, slug });
   } catch (err) {
