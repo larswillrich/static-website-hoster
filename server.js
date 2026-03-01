@@ -22,8 +22,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve the landing page
-app.use(express.static(path.join(__dirname, 'public')));
+// Redirect /staticwebsite -> /staticwebsite/ (trailing slash needed for relative URLs)
+if (BASE_PATH) {
+  app.get(BASE_PATH, (req, res) => {
+    res.redirect(301, `${BASE_PATH}/`);
+  });
+}
+
+// Serve the landing page under BASE_PATH
+app.use(`${BASE_PATH}/`, express.static(path.join(__dirname, 'public')));
 
 // Configure multer for file uploads
 const upload = multer({
@@ -52,7 +59,7 @@ function generateSlug() {
 }
 
 // Upload endpoint
-app.post('/upload', upload.single('site'), (req, res) => {
+app.post(`${BASE_PATH}/upload`, upload.single('site'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No file uploaded.' });
   }
@@ -115,7 +122,7 @@ app.post('/upload', upload.single('site'), (req, res) => {
 });
 
 // Serve hosted static sites
-app.use('/sites', express.static(UPLOADS_DIR, {
+app.use(`${BASE_PATH}/sites`, express.static(UPLOADS_DIR, {
   extensions: ['html'],
   index: ['index.html']
 }));
@@ -135,5 +142,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Static Website Hoster running on http://localhost:${PORT}`);
+  console.log(`Static Website Hoster running on http://localhost:${PORT}${BASE_PATH}/`);
 });
