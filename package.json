@@ -1,0 +1,14 @@
+{
+  "name": "static-website-hoster",
+  "version": "1.0.0",
+  "description": "Drag-and-drop static website hosting in a single container",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1"
+  }
+}

@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Drop & Host</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #08080a;
+      --surface: #131316;
+      --surface-border: #1e1e22;
+      --drop-bg: #0e0e11;
+      --drop-border: #2a2a30;
+      --drop-border-active: #e8793a;
+      --text: #ececef;
+      --text-dim: #7c7c86;
+      --text-muted: #4e4e56;
+      --accent: #e8793a;
+      --accent-soft: rgba(232, 121, 58, 0.08);
+      --accent-glow: rgba(232, 121, 58, 0.12);
+      --success: #3dd68c;
+      --success-soft: rgba(61, 214, 140, 0.08);
+      --error: #f25f5c;
+      --error-soft: rgba(242, 95, 92, 0.08);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes dashOffset {
+      to { stroke-dashoffset: 0; }
+    }
+
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Ambient background glow */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 35%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(900px, 140vw);
+      height: min(600px, 100vh);
+      background: radial-gradient(ellipse, rgba(232, 121, 58, 0.04) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      animation: fadeUp 0.6s ease-out both;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), #c4612e);
+      margin-bottom: 20px;
+      box-shadow: 0 4px 24px rgba(232, 121, 58, 0.2);
+    }
+
+    .logo svg {
+      width: 24px;
+      height: 24px;
+      color: white;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      padding: 24px;
+      animation: fadeUp 0.6s ease-out 0.1s both;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      position: relative;
+      border: 1.5px dashed var(--drop-border);
+      border-radius: 14px;
+      background: var(--drop-bg);
+      padding: 44px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      outline: none;
+    }
+
+    .drop-zone:hover,
+    .drop-zone:focus-visible {
+      border-color: #3a3a42;
+      background: rgba(232, 121, 58, 0.02);
+    }
+
+    .drop-zone.dragover {
+      border-color: var(--drop-border-active);
+      background: var(--accent-soft);
+      box-shadow: inset 0 0 0 1px var(--accent-glow), 0 0 32px var(--accent-glow);
+    }
+
+    .drop-zone.dragover .drop-icon {
+      transform: translateY(-4px) scale(1.05);
+      color: var(--accent);
+    }
+
+    .drop-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 52px;
+      margin: 0 auto 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-dim);
+      transition: all 0.3s ease;
+    }
+
+    .drop-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .drop-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .drop-hint {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .file-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid rgba(232, 121, 58, 0.12);
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .file-btn:hover {
+      background: rgba(232, 121, 58, 0.12);
+      border-color: rgba(232, 121, 58, 0.2);
+    }
+
+    .file-btn input {
+      display: none;
+    }
+
+    /* Uploading state */
+    .upload-state {
+      display: none;
+      padding: 44px 24px;
+      text-align: center;
+    }
+
+    .upload-state.active {
+      display: block;
+      animation: scaleIn 0.3s ease-out both;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 16px;
+      border: 2.5px solid rgba(255, 255, 255, 0.06);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .upload-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-dim);
+    }
+
+    .upload-file-name {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 280px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* Progress bar */
+    .progress-wrap {
+      margin-top: 20px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    /* Result state */
+    .result-state {
+      display: none;
+      padding: 36px 24px;
+      text-align: center;
+    }
+
+    .result-state.active {
+      display: block;
+      animation: scaleIn 0.35s ease-out both;
+    }
+
+    .result-check {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      background: var(--success-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .result-check svg {
+      width: 22px;
+      height: 22px;
+      color: var(--success);
+    }
+
+    .result-check svg circle {
+      stroke-dasharray: 100;
+      stroke-dashoffset: 100;
+      animation: dashOffset 0.5s ease-out 0.1s forwards;
+    }
+
+    .result-check svg polyline {
+      stroke-dasharray: 40;
+      stroke-dashoffset: 40;
+      animation: dashOffset 0.35s ease-out 0.4s forwards;
+    }
+
+    .result-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .result-subtitle {
+      font-size: 12.5px;
+      color: var(--text-dim);
+      margin-bottom: 20px;
+    }
+
+    .url-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .url-box a {
+      flex: 1;
+      font-size: 13px;
+      color: var(--accent);
+      text-decoration: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: left;
+      font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+    }
+
+    .url-box a:hover {
+      text-decoration: underline;
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border-color: #3a3a42;
+    }
+
+    .copy-btn.copied {
+      color: var(--success);
+      border-color: rgba(61, 214, 140, 0.2);
+      background: var(--success-soft);
+    }
+
+    .copy-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .new-upload-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      background: transparent;
+      border: 1px solid var(--surface-border);
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .new-upload-btn:hover {
+      color: var(--text);
+      border-color: #3a3a42;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Error state */
+    .error-state {
+      display: none;
+      padding: 36px 24px;
+      text-align: center;
+    }
+
+    .error-state.active {
+      display: block;
+      animation: scaleIn 0.3s ease-out both;
+    }
+
+    .error-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      background: var(--error-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--error);
+    }
+
+    .error-icon svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .error-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--error);
+      margin-bottom: 4px;
+    }
+
+    .error-message {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+      animation: fadeUp 0.6s ease-out 0.2s both;
+    }
+
+    .footer span {
+      color: var(--text-dim);
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      .card { padding: 18px; }
+      .drop-zone { padding: 36px 18px; }
+      h1 { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+          <path d="M12 12v9"/>
+          <path d="m16 16-4-4-4 4"/>
+        </svg>
+      </div>
+      <h1>Drop & Host</h1>
+      <p class="subtitle">Drop an HTML file or ZIP and get an instant link</p>
+    </div>
+
+    <div class="card">
+      <!-- Drop zone (idle state) -->
+      <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Upload HTML or ZIP file">
+        <div class="drop-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </div>
+        <p class="drop-label">Drop your file here</p>
+        <p class="drop-hint">or choose from your files</p>
+        <label class="file-btn">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 10v3h12v-3"/><path d="M8 3v8"/><path d="m5 6 3-3 3 3"/></svg>
+          Browse
+          <input type="file" accept=".html,.htm,.zip" id="fileInput">
+        </label>
+      </div>
+
+      <!-- Uploading state -->
+      <div class="upload-state" id="uploadState">
+        <div class="spinner"></div>
+        <p class="upload-text">Uploading...</p>
+        <p class="upload-file-name" id="uploadFileName"></p>
+        <div class="progress-wrap">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+      </div>
+
+      <!-- Result state -->
+      <div class="result-state" id="resultState">
+        <div class="result-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="9 12 11.5 14.5 16 10"/>
+          </svg>
+        </div>
+        <p class="result-title">Your site is live</p>
+        <p class="result-subtitle">Anyone with the link can view it</p>
+        <div class="url-box">
+          <a id="resultLink" href="#" target="_blank" rel="noopener"></a>
+          <button class="copy-btn" id="copyBtn" title="Copy link">
+            <svg id="copyIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <svg id="checkIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+              <polyline points="6 12 10.5 16.5 18 9"/>
+            </svg>
+          </button>
+        </div>
+        <button class="new-upload-btn" id="newUploadBtn">Upload another</button>
+      </div>
+
+      <!-- Error state -->
+      <div class="error-state" id="errorState">
+        <div class="error-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <p class="error-title">Upload failed</p>
+        <p class="error-message" id="errorMessage"></p>
+        <button class="new-upload-btn" id="retryBtn">Try again</button>
+      </div>
+    </div>
+
+    <p class="footer"><span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span></p>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const uploadState = document.getElementById('uploadState');
+    const uploadFileName = document.getElementById('uploadFileName');
+    const progressBar = document.getElementById('progressBar');
+    const resultState = document.getElementById('resultState');
+    const resultLink = document.getElementById('resultLink');
+    const copyBtn = document.getElementById('copyBtn');
+    const copyIcon = document.getElementById('copyIcon');
+    const checkIcon = document.getElementById('checkIcon');
+    const errorState = document.getElementById('errorState');
+    const errorMessage = document.getElementById('errorMessage');
+    const newUploadBtn = document.getElementById('newUploadBtn');
+    const retryBtn = document.getElementById('retryBtn');
+
+    function showState(state) {
+      dropZone.style.display = state === 'idle' ? '' : 'none';
+      uploadState.classList.toggle('active', state === 'uploading');
+      resultState.classList.toggle('active', state === 'result');
+      errorState.classList.toggle('active', state === 'error');
+    }
+
+    function resetToIdle() {
+      showState('idle');
+      fileInput.value = '';
+      progressBar.style.width = '0%';
+    }
+
+    // Drag and drop
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      dropZone.addEventListener(evt, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('dragover');
+      });
+    });
+
+    dropZone.addEventListener('drop', e => {
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    });
+
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    dropZone.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) handleFile(fileInput.files[0]);
+    });
+
+    function handleFile(file) {
+      const name = file.name.toLowerCase();
+      if (!name.endsWith('.zip') && !name.endsWith('.html') && !name.endsWith('.htm')) {
+        showError('Please upload an HTML or ZIP file.');
+        return;
+      }
+
+      uploadFileName.textContent = file.name;
+      showState('uploading');
+
+      const formData = new FormData();
+      formData.append('site', file);
+
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', e => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          progressBar.style.width = pct + '%';
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+            showResult(data.url);
+          } else {
+            showError(data.error || 'Something went wrong.');
+          }
+        } catch {
+          showError('Invalid response from server.');
+        }
+      });
+
+      xhr.addEventListener('error', () => showError('Network error. Please try again.'));
+      xhr.addEventListener('timeout', () => showError('Upload timed out. Please try again.'));
+
+      xhr.open('POST', '/upload');
+      xhr.timeout = 120000;
+      xhr.send(formData);
+    }
+
+    function showResult(url) {
+      resultLink.href = url;
+      resultLink.textContent = url;
+      showState('result');
+    }
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      showState('error');
+    }
+
+    // Copy to clipboard
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(resultLink.href);
+        copyIcon.style.display = 'none';
+        checkIcon.style.display = '';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyIcon.style.display = '';
+          checkIcon.style.display = 'none';
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      } catch {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = resultLink.href;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    });
+
+    newUploadBtn.addEventListener('click', resetToIdle);
+    retryBtn.addEventListener('click', resetToIdle);
+
+    // Prevent default browser drop behavior
+    document.addEventListener('dragover', e => e.preventDefault());
+    document.addEventListener('drop', e => e.preventDefault());
+  </script>
+</body>
+</html>
