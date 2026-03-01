@@ -6,10 +6,26 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
+app.enable('strict routing');
 const PORT = process.env.PORT || 3000;
 const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, ''); // e.g. "/staticwebsite"
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
+// Recursive directory size calculation
+function getDirectorySize(dirPath) {
+  let totalSize = 0;
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      totalSize += getDirectorySize(fullPath);
+    } else {
+      totalSize += fs.statSync(fullPath).size;
+    }
+  }
+  return totalSize;
+}
 
 // Ensure uploads directory exists
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -28,6 +44,11 @@ if (BASE_PATH) {
     res.redirect(301, `${BASE_PATH}/`);
   });
 }
+
+// Serve admin page (explicit route for clean URL without .html)
+app.get(`${BASE_PATH}/admin`, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 // Serve the landing page under BASE_PATH
 app.use(`${BASE_PATH}/`, express.static(path.join(__dirname, 'public')));
@@ -57,6 +78,62 @@ function generateSlug() {
   } while (fs.existsSync(path.join(UPLOADS_DIR, slug)) && attempts < 10);
   return slug;
 }
+
+// API: List all hosted sites
+app.get(`${BASE_PATH}/api/sites`, (req, res) => {
+  try {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      return res.json({ sites: [] });
+    }
+
+    const entries = fs.readdirSync(UPLOADS_DIR, { withFileTypes: true });
+    const sites = entries
+      .filter(entry => entry.isDirectory())
+      .map(entry => {
+        const dirPath = path.join(UPLOADS_DIR, entry.name);
+        const stats = fs.statSync(dirPath);
+        const size = getDirectorySize(dirPath);
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+        const host = req.headers['x-forwarded-host'] || req.get('host');
+        const url = `${protocol}://${host}${BASE_PATH}/sites/${entry.name}/`;
+        return {
+          slug: entry.name,
+          url,
+          createdAt: stats.birthtime.toISOString(),
+          size
+        };
+      })
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({ sites });
+  } catch (err) {
+    console.error('Error listing sites:', err);
+    res.status(500).json({ error: 'Failed to list sites.' });
+  }
+});
+
+// API: Delete a hosted site
+app.delete(`${BASE_PATH}/api/sites/:slug`, (req, res) => {
+  const slug = req.params.slug;
+
+  if (!/^[0-9a-f]{8}$/.test(slug)) {
+    return res.status(400).json({ error: 'Invalid slug format.' });
+  }
+
+  const siteDir = path.join(UPLOADS_DIR, slug);
+
+  if (!fs.existsSync(siteDir)) {
+    return res.status(404).json({ error: 'Site not found.' });
+  }
+
+  try {
+    fs.rmSync(siteDir, { recursive: true, force: true });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting site:', err);
+    res.status(500).json({ error: 'Failed to delete site.' });
+  }
+});
 
 // Upload endpoint
 app.post(`${BASE_PATH}/upload`, upload.single('site'), (req, res) => {
