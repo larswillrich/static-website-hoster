@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hosted Sites — Drop & Host</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #08080a;
+      --surface: #131316;
+      --surface-border: #1e1e22;
+      --text: #ececef;
+      --text-dim: #7c7c86;
+      --text-muted: #4e4e56;
+      --accent: #e8793a;
+      --accent-soft: rgba(232, 121, 58, 0.08);
+      --accent-glow: rgba(232, 121, 58, 0.12);
+      --success: #3dd68c;
+      --success-soft: rgba(61, 214, 140, 0.08);
+      --error: #f25f5c;
+      --error-soft: rgba(242, 95, 92, 0.08);
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 60px 20px 40px;
+      position: relative;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: 25%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(900px, 140vw);
+      height: min(600px, 100vh);
+      background: radial-gradient(ellipse, rgba(232, 121, 58, 0.04) 0%, transparent 65%);
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      width: 100%;
+      max-width: 720px;
+      animation: fadeUp 0.6s ease-out both;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), #c4612e);
+      box-shadow: 0 4px 24px rgba(232, 121, 58, 0.2);
+      flex-shrink: 0;
+    }
+    .logo svg { width: 20px; height: 20px; color: white; }
+
+    .header-text { flex: 1; }
+    .header-text h1 {
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: -0.03em;
+    }
+    .header-text p {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .back-link {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      text-decoration: none;
+      padding: 7px 14px;
+      border: 1px solid var(--surface-border);
+      border-radius: 9px;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .back-link:hover {
+      color: var(--text);
+      border-color: #3a3a42;
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      overflow: hidden;
+      animation: fadeUp 0.6s ease-out 0.1s both;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--surface-border);
+    }
+
+    .site-count {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+    }
+
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .icon-btn:hover {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      border-color: #3a3a42;
+    }
+    .icon-btn svg { width: 16px; height: 16px; }
+
+    /* Sites list */
+    .sites-list { min-height: 100px; }
+
+    .site-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--surface-border);
+      transition: background 0.15s ease;
+    }
+    .site-row:last-child { border-bottom: none; }
+    .site-row:hover { background: rgba(255, 255, 255, 0.015); }
+
+    .site-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .site-url {
+      display: block;
+      font-size: 13px;
+      color: var(--accent);
+      text-decoration: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+      margin-bottom: 4px;
+    }
+    .site-url:hover { text-decoration: underline; }
+
+    .site-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .site-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .site-meta-item svg {
+      width: 12px;
+      height: 12px;
+      opacity: 0.6;
+    }
+
+    .delete-btn {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .delete-btn:hover {
+      background: var(--error-soft);
+      border-color: rgba(242, 95, 92, 0.2);
+      color: var(--error);
+    }
+    .delete-btn svg { width: 16px; height: 16px; }
+
+    /* Loading state */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 20px;
+    }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 2.5px solid rgba(255, 255, 255, 0.06);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    /* Empty state */
+    .empty-state {
+      display: none;
+      padding: 48px 20px;
+      text-align: center;
+    }
+    .empty-state.active { display: block; }
+
+    .empty-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+    }
+    .empty-icon svg { width: 22px; height: 22px; }
+
+    .empty-title {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .empty-subtitle {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .upload-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid rgba(232, 121, 58, 0.12);
+      border-radius: 9px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .upload-link:hover {
+      background: rgba(232, 121, 58, 0.12);
+      border-color: rgba(232, 121, 58, 0.2);
+    }
+
+    /* Delete confirmation modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+      animation: fadeIn 0.15s ease-out both;
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      padding: 32px;
+      max-width: 360px;
+      width: 90%;
+      text-align: center;
+      animation: scaleIn 0.2s ease-out both;
+    }
+
+    .modal-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      background: var(--error-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--error);
+    }
+    .modal-icon svg { width: 22px; height: 22px; }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .modal-slug {
+      font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+      font-size: 13px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .modal-warning {
+      font-size: 12.5px;
+      color: var(--text-dim);
+      margin-bottom: 24px;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .btn-cancel, .btn-delete {
+      padding: 8px 20px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+    .btn-cancel {
+      color: var(--text-dim);
+      background: transparent;
+      border: 1px solid var(--surface-border);
+    }
+    .btn-cancel:hover {
+      color: var(--text);
+      border-color: #3a3a42;
+    }
+    .btn-delete {
+      color: white;
+      background: var(--error);
+    }
+    .btn-delete:hover { background: #d94e4b; }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      body { padding: 40px 16px 32px; }
+      .header { flex-wrap: wrap; gap: 12px; }
+      .back-link { order: 3; }
+      .site-row { flex-wrap: wrap; gap: 10px; padding: 14px 16px; }
+      .site-info { width: 100%; flex: none; }
+      .site-meta { flex: 1; }
+      .toolbar { padding: 14px 16px; }
+      .card { border-radius: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/>
+          <rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/>
+        </svg>
+      </div>
+      <div class="header-text">
+        <h1>Hosted Sites</h1>
+        <p>Manage your uploaded pages</p>
+      </div>
+      <a class="back-link" href="./">← Upload</a>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <span class="site-count" id="siteCount">Loading...</span>
+        <button class="icon-btn" id="refreshBtn" title="Refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/>
+            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+            <path d="M21 21v-5h-5"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="sites-list" id="sitesList">
+        <div class="loading" id="loadingState">
+          <div class="spinner"></div>
+        </div>
+      </div>
+
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+            <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+          </svg>
+        </div>
+        <p class="empty-title">No sites hosted yet</p>
+        <p class="empty-subtitle">Upload your first site to get started</p>
+        <a class="upload-link" href="./">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 10v3h12v-3"/><path d="M8 3v8"/><path d="m5 6 3-3 3 3"/></svg>
+          Upload a site
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete confirmation modal -->
+  <div class="modal-overlay" id="deleteModal">
+    <div class="modal">
+      <div class="modal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+          <line x1="10" y1="11" x2="10" y2="17"/>
+          <line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+      </div>
+      <p class="modal-title">Delete this site?</p>
+      <p class="modal-slug" id="modalSlug"></p>
+      <p class="modal-warning">This action cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="modalCancel">Cancel</button>
+        <button class="btn-delete" id="modalDelete">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Derive API base from current URL
+    const basePath = window.location.pathname.replace(/\/admin\/?$/, '');
+    const apiBase = basePath + '/api/sites';
+
+    const sitesList = document.getElementById('sitesList');
+    const siteCount = document.getElementById('siteCount');
+    const loadingState = document.getElementById('loadingState');
+    const emptyState = document.getElementById('emptyState');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const deleteModal = document.getElementById('deleteModal');
+    const modalSlug = document.getElementById('modalSlug');
+    const modalCancel = document.getElementById('modalCancel');
+    const modalDelete = document.getElementById('modalDelete');
+
+    let sites = [];
+    let pendingDeleteSlug = null;
+
+    // Format bytes to human-readable
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ' ' + units[i];
+    }
+
+    // Format ISO date to readable
+    function formatDate(iso) {
+      return new Intl.DateTimeFormat('en', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: 'numeric', minute: '2-digit'
+      }).format(new Date(iso));
+    }
+
+    // Fetch and render all sites
+    async function loadSites() {
+      loadingState.style.display = '';
+      emptyState.classList.remove('active');
+      // Clear existing rows
+      sitesList.querySelectorAll('.site-row').forEach(r => r.remove());
+      siteCount.textContent = 'Loading...';
+
+      try {
+        const res = await fetch(apiBase);
+        const data = await res.json();
+        sites = data.sites || [];
+        renderSites();
+      } catch {
+        siteCount.textContent = 'Failed to load';
+        loadingState.style.display = 'none';
+      }
+    }
+
+    function renderSites() {
+      loadingState.style.display = 'none';
+      sitesList.querySelectorAll('.site-row').forEach(r => r.remove());
+
+      if (sites.length === 0) {
+        siteCount.textContent = 'No sites';
+        emptyState.classList.add('active');
+        return;
+      }
+
+      emptyState.classList.remove('active');
+      siteCount.textContent = `${sites.length} site${sites.length !== 1 ? 's' : ''}`;
+
+      for (const site of sites) {
+        const row = document.createElement('div');
+        row.className = 'site-row';
+        row.innerHTML = `
+          <div class="site-info">
+            <a class="site-url" href="${site.url}" target="_blank" rel="noopener">${site.url.replace(/^https?:\/\//, '')}</a>
+            <div class="site-meta">
+              <span class="site-meta-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                ${formatDate(site.createdAt)}
+              </span>
+              <span class="site-meta-item">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+                ${formatBytes(site.size)}
+              </span>
+            </div>
+          </div>
+          <button class="delete-btn" title="Delete site" data-slug="${site.slug}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+            </svg>
+          </button>
+        `;
+        row.querySelector('.delete-btn').addEventListener('click', () => {
+          confirmDelete(site.slug);
+        });
+        sitesList.appendChild(row);
+      }
+    }
+
+    // Delete flow
+    function confirmDelete(slug) {
+      pendingDeleteSlug = slug;
+      modalSlug.textContent = slug;
+      deleteModal.classList.add('active');
+    }
+
+    function closeModal() {
+      deleteModal.classList.remove('active');
+      pendingDeleteSlug = null;
+    }
+
+    async function executeDelete() {
+      if (!pendingDeleteSlug) return;
+      const slug = pendingDeleteSlug;
+      closeModal();
+
+      try {
+        const res = await fetch(`${apiBase}/${slug}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          sites = sites.filter(s => s.slug !== slug);
+          renderSites();
+        }
+      } catch {
+        // Silently fail — user can refresh
+      }
+    }
+
+    // Event listeners
+    refreshBtn.addEventListener('click', loadSites);
+    modalCancel.addEventListener('click', closeModal);
+    modalDelete.addEventListener('click', executeDelete);
+
+    deleteModal.addEventListener('click', (e) => {
+      if (e.target === deleteModal) closeModal();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // Load on page ready
+    loadSites();
+  </script>
+</body>
+</html>
