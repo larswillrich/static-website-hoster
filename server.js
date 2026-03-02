@@ -45,8 +45,8 @@ if (BASE_PATH) {
   });
 }
 
-// Serve admin page (explicit route for clean URL without .html)
-app.get(`${BASE_PATH}/admin`, (req, res) => {
+// Serve admin page under a cryptic path (security through obscurity)
+app.get(`${BASE_PATH}/d7x9k2-panel`, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
