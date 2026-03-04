@@ -4,13 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-H4FPVJV6P8"></script>
+  <!-- Google Analytics (loaded only after cookie consent) -->
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-H4FPVJV6P8');
+    function loadGA() {
+      if (document.querySelector('script[src*="googletagmanager"]')) return;
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=G-H4FPVJV6P8';
+      document.head.appendChild(s);
+      gtag('js', new Date());
+      gtag('config', 'G-H4FPVJV6P8');
+    }
+    if (localStorage.getItem('cookie-consent') === 'accepted') loadGA();
   </script>
 
   <!-- Primary SEO -->
@@ -917,6 +924,79 @@
       color: var(--accent);
     }
 
+    /* Cookie banner */
+    .cookie-banner {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: var(--surface);
+      border-top: 1px solid var(--surface-border);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      animation: fadeUp 0.4s ease-out both;
+      box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .cookie-banner.hidden { display: none; }
+
+    .cookie-text {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      max-width: 520px;
+    }
+
+    .cookie-text a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .cookie-text a:hover {
+      text-decoration: underline;
+    }
+
+    .cookie-buttons {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .cookie-btn {
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid var(--surface-border);
+      background: transparent;
+      color: var(--text-dim);
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    .cookie-btn:hover {
+      border-color: #3a3a42;
+      color: var(--text);
+    }
+
+    .cookie-btn-accept {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .cookie-btn-accept:hover {
+      background: #d06c32;
+      border-color: #d06c32;
+      color: white;
+    }
+
     /* Responsive */
     @media (max-width: 640px) {
       .steps { grid-template-columns: 1fr; }
@@ -1208,9 +1288,24 @@
     </section>
   </div>
 
+  <!-- Cookie Consent Banner -->
+  <div class="cookie-banner" id="cookieBanner">
+    <p class="cookie-text">We use cookies for analytics to improve our service. See our <a href="./privacy">Privacy Policy</a> for details.</p>
+    <div class="cookie-buttons">
+      <button class="cookie-btn" id="cookieDecline">Decline</button>
+      <button class="cookie-btn cookie-btn-accept" id="cookieAccept">Accept</button>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="site-footer">
-    <p>HostMyPage &mdash; Free static website hosting. <a href="https://github.com/LarsOL/static-website-hoster" rel="noopener">Open Source</a></p>
+    <p>HostMyPage &mdash; Free static website hosting.</p>
+    <p style="margin-top: 8px;">
+      <a href="./imprint">Imprint</a> &middot;
+      <a href="./privacy">Privacy Policy</a> &middot;
+      <a href="./terms">Terms of Service</a> &middot;
+      <a href="https://github.com/larswillrich/static-website-hoster" rel="noopener">GitHub</a>
+    </p>
   </footer>
 
   <script>
@@ -1360,6 +1455,21 @@
     // Prevent default browser drop behavior
     document.addEventListener('dragover', e => e.preventDefault());
     document.addEventListener('drop', e => e.preventDefault());
+
+    // Cookie consent
+    const cookieBanner = document.getElementById('cookieBanner');
+    if (localStorage.getItem('cookie-consent')) {
+      cookieBanner.classList.add('hidden');
+    }
+    document.getElementById('cookieAccept').addEventListener('click', () => {
+      localStorage.setItem('cookie-consent', 'accepted');
+      cookieBanner.classList.add('hidden');
+      loadGA();
+    });
+    document.getElementById('cookieDecline').addEventListener('click', () => {
+      localStorage.setItem('cookie-consent', 'declined');
+      cookieBanner.classList.add('hidden');
+    });
 
     // FAQ accordion
     document.querySelectorAll('.faq-question').forEach(btn => {

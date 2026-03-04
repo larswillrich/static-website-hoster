@@ -52,6 +52,17 @@ app.get(`${BASE_PATH}/d7x9k2-panel`, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// Legal pages (clean URLs)
+app.get(`${BASE_PATH}/imprint`, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'imprint.html'));
+});
+app.get(`${BASE_PATH}/privacy`, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+app.get(`${BASE_PATH}/terms`, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'terms.html'));
+});
+
 // Serve the landing page under BASE_PATH with caching
 app.use(`${BASE_PATH}/`, express.static(path.join(__dirname, 'public'), {
   maxAge: '1h',
