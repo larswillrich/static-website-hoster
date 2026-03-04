@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blog — HostMyPage | Static Website Hosting Tips & Guides</title>
+  <meta name="description" content="Learn how to host static websites, deploy AI-generated sites, and get the most out of free website hosting. Tips, guides, and tutorials from HostMyPage.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://host-my-page.com/blog/">
+  <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+  <meta name="theme-color" content="#e8793a">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://host-my-page.com/blog/">
+  <meta property="og:title" content="Blog — HostMyPage">
+  <meta property="og:description" content="Tips, guides, and tutorials for static website hosting.">
+  <meta property="og:image" content="https://host-my-page.com/og-image.png">
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #08080a; --surface: #131316; --surface-border: #1e1e22;
+      --text: #ececef; --text-dim: #7c7c86; --text-muted: #4e4e56;
+      --accent: #e8793a;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 680px; margin: 0 auto; padding: 60px 20px 80px; }
+    .back { display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+      color: var(--text-dim); text-decoration: none; margin-bottom: 32px; transition: color 0.2s; }
+    .back:hover { color: var(--accent); }
+    .back svg { width: 16px; height: 16px; }
+    h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 8px; }
+    .intro { font-size: 15px; color: var(--text-dim); line-height: 1.7; margin-bottom: 40px; }
+    .posts { display: flex; flex-direction: column; gap: 16px; }
+    .post-card {
+      background: var(--surface); border: 1px solid var(--surface-border);
+      border-radius: 16px; padding: 24px; text-decoration: none;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .post-card:hover { border-color: rgba(232,121,58,0.3); transform: translateY(-2px); }
+    .post-tag {
+      display: inline-block; font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--accent); background: rgba(232,121,58,0.08);
+      border: 1px solid rgba(232,121,58,0.1); border-radius: 6px; padding: 3px 8px; margin-bottom: 10px;
+    }
+    .post-title { font-size: 18px; font-weight: 650; color: var(--text); margin-bottom: 8px; line-height: 1.3; }
+    .post-excerpt { font-size: 14px; color: var(--text-dim); line-height: 1.6; margin-bottom: 12px; }
+    .post-meta { font-size: 12px; color: var(--text-muted); }
+    .footer { text-align: center; padding: 32px 20px; font-size: 12px; color: var(--text-muted);
+      border-top: 1px solid var(--surface-border); }
+    .footer a { color: var(--text-dim); text-decoration: none; }
+    .footer a:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <a href="../" class="back">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back to HostMyPage
+    </a>
+
+    <h1>Blog</h1>
+    <p class="intro">Guides, tips, and tutorials on static website hosting, deploying AI-generated sites, and getting the most out of HostMyPage.</p>
+
+    <div class="posts">
+      <a href="./host-chatgpt-website" class="post-card">
+        <span class="post-tag">Guide</span>
+        <h2 class="post-title">How to Host a ChatGPT-Generated Website for Free</h2>
+        <p class="post-excerpt">ChatGPT can generate complete HTML websites in seconds. Learn how to take that code and publish it as a live website anyone can visit — no technical skills needed.</p>
+        <p class="post-meta">March 4, 2026 &middot; 4 min read</p>
+      </a>
+
+      <a href="./static-vs-dynamic-hosting" class="post-card">
+        <span class="post-tag">Explainer</span>
+        <h2 class="post-title">Static vs Dynamic Hosting: Which One Do You Need?</h2>
+        <p class="post-excerpt">Not sure whether you need static or dynamic hosting? This guide breaks down the differences, costs, and use cases to help you choose the right approach.</p>
+        <p class="post-meta">March 4, 2026 &middot; 5 min read</p>
+      </a>
+
+      <a href="./host-website-without-github" class="post-card">
+        <span class="post-tag">Tutorial</span>
+        <h2 class="post-title">How to Host a Website Without GitHub or the Command Line</h2>
+        <p class="post-excerpt">You don't need Git, a terminal, or any developer tools to host a website. Here's how to go from an HTML file on your computer to a live website in seconds.</p>
+        <p class="post-meta">March 4, 2026 &middot; 3 min read</p>
+      </a>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>
+      <a href="../">HostMyPage</a> &middot;
+      <a href="../imprint">Imprint</a> &middot;
+      <a href="../privacy">Privacy Policy</a> &middot;
+      <a href="../terms">Terms of Service</a>
+    </p>
+  </footer>
+</body>
+</html>

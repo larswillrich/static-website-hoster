@@ -63,6 +63,24 @@ app.get(`${BASE_PATH}/terms`, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'terms.html'));
 });
 
+// Blog (clean URLs)
+app.get(`${BASE_PATH}/blog`, (req, res) => {
+  res.redirect(301, `${BASE_PATH}/blog/`);
+});
+app.get(`${BASE_PATH}/blog/`, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'blog', 'index.html'));
+});
+app.get(`${BASE_PATH}/blog/:slug`, (req, res, next) => {
+  const slug = req.params.slug;
+  if (!/^[a-z0-9-]+$/.test(slug)) return next();
+  const filePath = path.join(__dirname, 'public', 'blog', `${slug}.html`);
+  if (fs.existsSync(filePath)) {
+    res.sendFile(filePath);
+  } else {
+    next();
+  }
+});
+
 // Serve the landing page under BASE_PATH with caching
 app.use(`${BASE_PATH}/`, express.static(path.join(__dirname, 'public'), {
   maxAge: '1h',
