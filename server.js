@@ -32,9 +32,11 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-// Security headers
+// Security & SEO headers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
 
@@ -50,8 +52,20 @@ app.get(`${BASE_PATH}/d7x9k2-panel`, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Serve the landing page under BASE_PATH
-app.use(`${BASE_PATH}/`, express.static(path.join(__dirname, 'public')));
+// Serve the landing page under BASE_PATH with caching
+app.use(`${BASE_PATH}/`, express.static(path.join(__dirname, 'public'), {
+  maxAge: '1h',
+  setHeaders: (res, filePath) => {
+    // Cache static assets longer
+    if (filePath.endsWith('.png') || filePath.endsWith('.svg')) {
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 day
+    }
+    // Proper content type for sitemap
+    if (filePath.endsWith('sitemap.xml')) {
+      res.setHeader('Content-Type', 'application/xml');
+    }
+  }
+}));
 
 // Configure multer for file uploads
 const upload = multer({

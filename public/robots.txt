@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /d7x9k2-panel
+Disallow: /sites/
+
+Sitemap: https://host-my-page.com/sitemap.xml
