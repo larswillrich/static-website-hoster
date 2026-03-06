@@ -48,6 +48,9 @@
   <meta name="twitter:image" content="https://host-my-page.com/og-image.png">
   <meta name="twitter:image:alt" content="HostMyPage — Drop a file, get a link, instantly. Free static website hosting.">
 
+  <!-- reCAPTCHA v3 -->
+  <script src="https://www.google.com/recaptcha/api.js?render=6LffwYEsAAAAD9VMHiP9jwweV-pIrkcQVkDoiGc"></script>
+
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
   <link rel="apple-touch-icon" href="./og-image.png">
@@ -1382,38 +1385,46 @@
       uploadFileName.textContent = file.name;
       showState('uploading');
 
-      const formData = new FormData();
-      formData.append('site', file);
-      formData.append('website', document.getElementById('hpField').value);
+      // Get reCAPTCHA v3 token before uploading
+      grecaptcha.ready(function() {
+        grecaptcha.execute('6LffwYEsAAAAD9VMHiP9jwweV-pIrkcQVkDoiGc', { action: 'upload' }).then(function(token) {
+          const formData = new FormData();
+          formData.append('site', file);
+          formData.append('website', document.getElementById('hpField').value);
+          formData.append('recaptcha_token', token);
 
-      const xhr = new XMLHttpRequest();
+          const xhr = new XMLHttpRequest();
 
-      xhr.upload.addEventListener('progress', e => {
-        if (e.lengthComputable) {
-          const pct = Math.round((e.loaded / e.total) * 100);
-          progressBar.style.width = pct + '%';
-        }
+          xhr.upload.addEventListener('progress', e => {
+            if (e.lengthComputable) {
+              const pct = Math.round((e.loaded / e.total) * 100);
+              progressBar.style.width = pct + '%';
+            }
+          });
+
+          xhr.addEventListener('load', () => {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                showResult(data.url);
+              } else {
+                showError(data.error || 'Something went wrong.');
+              }
+            } catch {
+              showError('Invalid response from server.');
+            }
+          });
+
+          xhr.addEventListener('error', () => showError('Network error. Please try again.'));
+          xhr.addEventListener('timeout', () => showError('Upload timed out. Please try again.'));
+
+          xhr.open('POST', './upload');
+          xhr.timeout = 120000;
+          xhr.send(formData);
+        }).catch(function() {
+          showError('Security verification failed. Please reload and try again.');
+        });
       });
-
-      xhr.addEventListener('load', () => {
-        try {
-          const data = JSON.parse(xhr.responseText);
-          if (xhr.status >= 200 && xhr.status < 300 && data.success) {
-            showResult(data.url);
-          } else {
-            showError(data.error || 'Something went wrong.');
-          }
-        } catch {
-          showError('Invalid response from server.');
-        }
-      });
-
-      xhr.addEventListener('error', () => showError('Network error. Please try again.'));
-      xhr.addEventListener('timeout', () => showError('Upload timed out. Please try again.'));
-
-      xhr.open('POST', './upload');
-      xhr.timeout = 120000;
-      xhr.send(formData);
     }
 
     function showResult(url) {

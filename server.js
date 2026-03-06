@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, ''); // e.g. "/staticwebsite"
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
 
 // Recursive directory size calculation
 function getDirectorySize(dirPath) {
@@ -192,11 +193,40 @@ const uploadLimiter = rateLimit({
   }
 });
 
+// Verify reCAPTCHA v3 token with Google
+async function verifyRecaptcha(token) {
+  if (!RECAPTCHA_SECRET_KEY) return { success: true, score: 1.0 }; // Skip if no key configured
+  try {
+    const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `secret=${encodeURIComponent(RECAPTCHA_SECRET_KEY)}&response=${encodeURIComponent(token)}`
+    });
+    return await response.json();
+  } catch (err) {
+    console.error('reCAPTCHA verification error:', err);
+    return { success: false, score: 0 };
+  }
+}
+
 // Upload endpoint
-app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), (req, res) => {
+app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req, res) => {
   // Honeypot check: bots fill hidden fields, real users don't
   if (req.body && req.body.website) {
     return res.status(400).json({ success: false, error: 'Failed to process uploaded file.' });
+  }
+
+  // reCAPTCHA v3 verification
+  const recaptchaToken = req.body && req.body.recaptcha_token;
+  if (RECAPTCHA_SECRET_KEY && !recaptchaToken) {
+    return res.status(400).json({ success: false, error: 'Security verification missing. Please reload and try again.' });
+  }
+  if (RECAPTCHA_SECRET_KEY) {
+    const captchaResult = await verifyRecaptcha(recaptchaToken);
+    if (!captchaResult.success || captchaResult.score < 0.5) {
+      console.log(`reCAPTCHA rejected: success=${captchaResult.success}, score=${captchaResult.score}`);
+      return res.status(403).json({ success: false, error: 'Security verification failed. Please try again.' });
+    }
   }
 
   if (!req.file) {
