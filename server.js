@@ -4,6 +4,7 @@ const AdmZip = require('adm-zip');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 app.enable('strict routing');
@@ -178,8 +179,26 @@ app.delete(`${BASE_PATH}/api/sites/:slug`, (req, res) => {
   }
 });
 
+// Rate limiting for uploads: 5 requests per 15 minutes per IP
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+  keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip,
+  handler: (req, res) => {
+    res.status(429).json({ success: false, error: 'Too many uploads. Please try again later.' });
+  }
+});
+
 // Upload endpoint
-app.post(`${BASE_PATH}/upload`, upload.single('site'), (req, res) => {
+app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), (req, res) => {
+  // Honeypot check: bots fill hidden fields, real users don't
+  if (req.body && req.body.website) {
+    return res.status(400).json({ success: false, error: 'Failed to process uploaded file.' });
+  }
+
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No file uploaded.' });
   }

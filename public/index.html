@@ -1093,6 +1093,10 @@
         </div>
       </div>
 
+      <!-- Honeypot field — hidden from real users, filled by bots -->
+      <div style="position:absolute;left:-9999px" aria-hidden="true">
+        <input type="text" name="website" id="hpField" tabindex="-1" autocomplete="off" value="">
+      </div>
       <p class="upload-hint"><span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span></p>
     </div>
   </main>
@@ -1380,6 +1384,7 @@
 
       const formData = new FormData();
       formData.append('site', file);
+      formData.append('website', document.getElementById('hpField').value);
 
       const xhr = new XMLHttpRequest();
 
