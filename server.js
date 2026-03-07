@@ -124,6 +124,16 @@ function generateSlug() {
   return slug;
 }
 
+// Health check (shows if reCAPTCHA is configured, without exposing the key)
+app.get(`${BASE_PATH}/api/health`, (req, res) => {
+  res.json({
+    status: 'ok',
+    recaptchaConfigured: !!RECAPTCHA_SECRET_KEY,
+    recaptchaKeyLength: RECAPTCHA_SECRET_KEY.length,
+    envKeys: Object.keys(process.env).filter(k => k.includes('RECAPTCHA')).join(', ') || 'none'
+  });
+});
+
 // API: List all hosted sites
 app.get(`${BASE_PATH}/api/sites`, (req, res) => {
   try {
