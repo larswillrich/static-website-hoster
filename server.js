@@ -42,6 +42,44 @@ app.use((req, res, next) => {
   next();
 });
 
+// CORS: only allow upload requests from same origin
+app.use(`${BASE_PATH}/upload`, (req, res, next) => {
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || null;
+  const origin = req.headers.origin;
+  if (req.method === 'OPTIONS') {
+    if (allowedOrigin && origin === allowedOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+      res.setHeader('Access-Control-Allow-Methods', 'POST');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    }
+    return res.sendStatus(204);
+  }
+  // Block cross-origin POST requests
+  if (origin && allowedOrigin && origin !== allowedOrigin) {
+    return res.status(403).json({ success: false, error: 'Cross-origin requests not allowed.' });
+  }
+  next();
+});
+
+// CSRF token store (in-memory, tokens expire after 10 minutes)
+const csrfTokens = new Map();
+const CSRF_TOKEN_EXPIRY = 10 * 60 * 1000;
+
+// Clean up expired CSRF tokens periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, timestamp] of csrfTokens) {
+    if (now - timestamp > CSRF_TOKEN_EXPIRY) csrfTokens.delete(token);
+  }
+}, 60 * 1000);
+
+// Endpoint to get a CSRF token (must be fetched from the page before uploading)
+app.get(`${BASE_PATH}/api/csrf-token`, (req, res) => {
+  const token = crypto.randomBytes(32).toString('hex');
+  csrfTokens.set(token, Date.now());
+  res.json({ token });
+});
+
 // Redirect /staticwebsite -> /staticwebsite/ (trailing slash needed for relative URLs)
 if (BASE_PATH) {
   app.get(BASE_PATH, (req, res) => {
@@ -221,6 +259,13 @@ async function verifyRecaptcha(token) {
 
 // Upload endpoint
 app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req, res) => {
+  // CSRF token verification
+  const csrfToken = req.body && req.body.csrf_token;
+  if (!csrfToken || !csrfTokens.has(csrfToken)) {
+    return res.status(403).json({ success: false, error: 'Invalid or missing security token. Please reload and try again.' });
+  }
+  csrfTokens.delete(csrfToken); // Single-use token
+
   // Honeypot check: bots fill hidden fields, real users don't
   if (req.body && req.body.website) {
     return res.status(400).json({ success: false, error: 'Failed to process uploaded file.' });

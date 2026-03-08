@@ -1385,45 +1385,50 @@
       uploadFileName.textContent = file.name;
       showState('uploading');
 
-      // Get reCAPTCHA v3 token before uploading
-      grecaptcha.ready(function() {
-        grecaptcha.execute('6LedsIMsAAAAAFJgUCPklgFb4nOAlola9IMRdW5Y', { action: 'upload' }).then(function(token) {
-          const formData = new FormData();
-          formData.append('site', file);
-          formData.append('website', document.getElementById('hpField').value);
-          formData.append('recaptcha_token', token);
+      // Fetch CSRF token, then reCAPTCHA token, then upload
+      fetch('./api/csrf-token').then(function(r) { return r.json(); }).then(function(csrf) {
+        grecaptcha.ready(function() {
+          grecaptcha.execute('6LedsIMsAAAAAFJgUCPklgFb4nOAlola9IMRdW5Y', { action: 'upload' }).then(function(token) {
+            const formData = new FormData();
+            formData.append('site', file);
+            formData.append('website', document.getElementById('hpField').value);
+            formData.append('recaptcha_token', token);
+            formData.append('csrf_token', csrf.token);
 
-          const xhr = new XMLHttpRequest();
+            const xhr = new XMLHttpRequest();
 
-          xhr.upload.addEventListener('progress', e => {
-            if (e.lengthComputable) {
-              const pct = Math.round((e.loaded / e.total) * 100);
-              progressBar.style.width = pct + '%';
-            }
-          });
-
-          xhr.addEventListener('load', () => {
-            try {
-              const data = JSON.parse(xhr.responseText);
-              if (xhr.status >= 200 && xhr.status < 300 && data.success) {
-                showResult(data.url);
-              } else {
-                showError(data.error || 'Something went wrong.');
+            xhr.upload.addEventListener('progress', e => {
+              if (e.lengthComputable) {
+                const pct = Math.round((e.loaded / e.total) * 100);
+                progressBar.style.width = pct + '%';
               }
-            } catch {
-              showError('Invalid response from server.');
-            }
+            });
+
+            xhr.addEventListener('load', () => {
+              try {
+                const data = JSON.parse(xhr.responseText);
+                if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                  showResult(data.url);
+                } else {
+                  showError(data.error || 'Something went wrong.');
+                }
+              } catch {
+                showError('Invalid response from server.');
+              }
+            });
+
+            xhr.addEventListener('error', () => showError('Network error. Please try again.'));
+            xhr.addEventListener('timeout', () => showError('Upload timed out. Please try again.'));
+
+            xhr.open('POST', './upload');
+            xhr.timeout = 120000;
+            xhr.send(formData);
+          }).catch(function() {
+            showError('Security verification failed. Please reload and try again.');
           });
-
-          xhr.addEventListener('error', () => showError('Network error. Please try again.'));
-          xhr.addEventListener('timeout', () => showError('Upload timed out. Please try again.'));
-
-          xhr.open('POST', './upload');
-          xhr.timeout = 120000;
-          xhr.send(formData);
-        }).catch(function() {
-          showError('Security verification failed. Please reload and try again.');
         });
+      }).catch(function() {
+        showError('Could not verify security token. Please reload and try again.');
       });
     }
 
