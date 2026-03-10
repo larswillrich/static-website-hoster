@@ -1007,9 +1007,62 @@
       .drop-zone { padding: 36px 18px; }
       h1 { font-size: 20px; }
     }
+
+    /* Language switcher */
+    .lang-switcher {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 999;
+      display: flex;
+      gap: 4px;
+    }
+
+    .lang-btn {
+      width: 20px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.08);
+      cursor: pointer;
+      font-size: 0;
+      padding: 0;
+      transition: all 0.2s ease;
+      opacity: 0.5;
+    }
+
+    .lang-btn:hover {
+      opacity: 0.85;
+    }
+
+    .lang-btn.active {
+      opacity: 1;
+      border-color: rgba(255,255,255,0.25);
+    }
+
+    .lang-btn[data-lang="en"] { background: #012169; }
+    .lang-btn[data-lang="de"] { background: linear-gradient(180deg, #000 33.3%, #DD0000 33.3%, #DD0000 66.6%, #FFCC00 66.6%); }
+    .lang-btn[data-lang="es"] { background: linear-gradient(180deg, #AA151B 25%, #F1BF00 25%, #F1BF00 75%, #AA151B 75%); }
+    .lang-btn[data-lang="fr"] { background: linear-gradient(90deg, #002395 33.3%, #fff 33.3%, #fff 66.6%, #ED2939 66.6%); }
+    .lang-btn[data-lang="ru"] { background: linear-gradient(180deg, #fff 33.3%, #0039A6 33.3%, #0039A6 66.6%, #D52B1E 66.6%); }
+    .lang-btn[data-lang="zh"] { background: #DE2910; }
+
+    @media (max-width: 480px) {
+      .lang-switcher { top: 10px; right: 10px; gap: 3px; }
+      .lang-btn { width: 16px; height: 11px; }
+    }
   </style>
 </head>
 <body>
+
+  <!-- Language Switcher -->
+  <div class="lang-switcher">
+    <button class="lang-btn active" data-lang="en" title="English" aria-label="English"></button>
+    <button class="lang-btn" data-lang="de" title="Deutsch" aria-label="Deutsch"></button>
+    <button class="lang-btn" data-lang="es" title="Español" aria-label="Español"></button>
+    <button class="lang-btn" data-lang="fr" title="Français" aria-label="Français"></button>
+    <button class="lang-btn" data-lang="ru" title="Русский" aria-label="Русский"></button>
+    <button class="lang-btn" data-lang="zh" title="中文" aria-label="中文"></button>
+  </div>
 
   <!-- Hero: Upload area -->
   <main class="hero" id="top">
@@ -1041,7 +1094,7 @@
           <p class="drop-hint">or choose from your files</p>
           <label class="file-btn">
             <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 10v3h12v-3"/><path d="M8 3v8"/><path d="m5 6 3-3 3 3"/></svg>
-            Browse
+            <span class="browse-text">Browse</span>
             <input type="file" accept=".html,.htm,.zip" id="fileInput">
           </label>
         </div>
@@ -1378,7 +1431,7 @@
     function handleFile(file) {
       const name = file.name.toLowerCase();
       if (!name.endsWith('.zip') && !name.endsWith('.html') && !name.endsWith('.htm')) {
-        showError('Please upload an HTML or ZIP file.');
+        showError(t('errFileType'));
         return;
       }
 
@@ -1410,25 +1463,25 @@
                 if (xhr.status >= 200 && xhr.status < 300 && data.success) {
                   showResult(data.url);
                 } else {
-                  showError(data.error || 'Something went wrong.');
+                  showError(data.error || t('errGeneric'));
                 }
               } catch {
-                showError('Invalid response from server.');
+                showError(t('errInvalidResponse'));
               }
             });
 
-            xhr.addEventListener('error', () => showError('Network error. Please try again.'));
-            xhr.addEventListener('timeout', () => showError('Upload timed out. Please try again.'));
+            xhr.addEventListener('error', () => showError(t('errNetwork')));
+            xhr.addEventListener('timeout', () => showError(t('errTimeout')));
 
             xhr.open('POST', './upload');
             xhr.timeout = 120000;
             xhr.send(formData);
           }).catch(function() {
-            showError('Security verification failed. Please reload and try again.');
+            showError(t('errSecurityFailed'));
           });
         });
       }).catch(function() {
-        showError('Could not verify security token. Please reload and try again.');
+        showError(t('errTokenFailed'));
       });
     }
 
@@ -1507,6 +1560,471 @@
         }
       });
     });
+
+    // ── i18n Translations ──
+    const i18n = {
+      en: {
+        title: 'Free Static Website Hosting',
+        subtitle: 'Drop a file. Get a link. Instantly. No signup needed.',
+        dropLabel: 'Drop your HTML or ZIP here',
+        dropHint: 'or choose from your files',
+        browse: 'Browse',
+        uploading: 'Uploading...',
+        resultTitle: 'Your site is live',
+        resultSubtitle: 'Anyone with the link can view it',
+        uploadAnother: 'Upload another',
+        uploadFailed: 'Upload failed',
+        tryAgain: 'Try again',
+        uploadHint: '<span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span>',
+        howItWorks: 'How It Works',
+        step1Title: 'Drop your file', step1Desc: 'Drag and drop an HTML file or ZIP archive onto the upload area above.',
+        step2Title: 'Get your link', step2Desc: 'Your website is instantly deployed and you receive a unique shareable URL.',
+        step3Title: 'Share it', step3Desc: 'Copy the link and share your live static website with anyone, anywhere.',
+        aiTitle: 'Built for the AI Generation',
+        aiDesc: 'Generated a website with an AI tool? Host it instantly. HostMyPage is the fastest way to publish AI-generated static websites. No Git, no CLI, no deploy pipeline.',
+        whyTitle: 'Why HostMyPage',
+        feat1Title: 'Instant Deploy', feat1Desc: 'Your site goes live in under a second. No build steps, no waiting.',
+        feat2Title: 'Zero Signup', feat2Desc: 'No account, no email, no password. Just upload and go.',
+        feat3Title: 'Full Websites', feat3Desc: 'Upload ZIP archives with HTML, CSS, JS, images, and any other static assets.',
+        feat4Title: 'Shareable Links', feat4Desc: 'Every upload gets a unique, clean URL you can share with anyone.',
+        feat5Title: 'No Git Required', feat5Desc: 'Skip the terminal. No repositories, no CLI commands, no deploy config.',
+        feat6Title: '100% Free', feat6Desc: 'No hidden costs, no premium tiers, no credit card. Completely free.',
+        perfectFor: 'Perfect For',
+        uc1Title: 'AI-Generated Sites', uc1Desc: 'Export HTML from ChatGPT, Claude, or any AI tool and host it instantly.',
+        uc2Title: 'Portfolios', uc2Desc: 'Share your work with a clean, fast-loading portfolio site.',
+        uc3Title: 'Landing Pages', uc3Desc: 'Launch marketing pages and campaigns in seconds.',
+        uc4Title: 'Documentation', uc4Desc: 'Publish project docs, guides, and reference material.',
+        uc5Title: 'Student Projects', uc5Desc: 'Submit and showcase class projects and assignments.',
+        uc6Title: 'Prototypes', uc6Desc: 'Share quick prototypes and mockups with your team or clients.',
+        faqTitle: 'Frequently Asked Questions',
+        faq1Q: 'How do I host a static website for free?',
+        faq1A: 'Simply drag and drop your HTML file or ZIP archive onto the upload area above. You\'ll instantly receive a shareable link to your live website. No signup, no Git, no command line needed.',
+        faq2Q: 'What file types can I upload?',
+        faq2A: 'HostMyPage accepts single HTML files (.html, .htm) and ZIP archives (.zip) up to 50 MB. ZIP files can contain HTML, CSS, JavaScript, images, and any other static assets. The ZIP must include an index.html at the root level.',
+        faq3Q: 'Can I host an AI-generated website?',
+        faq3A: 'Yes! HostMyPage is the perfect companion for AI coding tools. Export the HTML from ChatGPT, Claude, v0, Bolt, Lovable, or any AI tool that generates websites, then drag and drop it here to instantly publish it.',
+        faq4Q: 'Do I need to create an account?',
+        faq4A: 'No. HostMyPage requires zero signup. Just upload your file and get a link. No email, no password, no account creation needed.',
+        faq5Q: 'Is HostMyPage really free?',
+        faq5A: 'Yes, HostMyPage is completely free to use. There are no hidden fees, no premium tiers, and no credit card required. Upload your static website and share it with the world at no cost.',
+        faq6Q: 'What is static website hosting?',
+        faq6A: 'Static website hosting serves pre-built HTML, CSS, and JavaScript files directly to visitors without server-side processing. It\'s faster, more secure, and simpler than dynamic hosting. Static sites are ideal for portfolios, landing pages, documentation, and AI-generated websites.',
+        cookieText: 'We use cookies for analytics to improve our service. See our <a href="./privacy">Privacy Policy</a> for details.',
+        cookieDecline: 'Decline', cookieAccept: 'Accept',
+        footerLine: 'HostMyPage &mdash; Free static website hosting.',
+        footerBlog: 'Blog', footerImprint: 'Imprint', footerPrivacy: 'Privacy Policy', footerTerms: 'Terms of Service',
+        errFileType: 'Please upload an HTML or ZIP file.',
+        errSecurityFailed: 'Security verification failed. Please reload and try again.',
+        errTokenFailed: 'Could not verify security token. Please reload and try again.',
+        errNetwork: 'Network error. Please try again.',
+        errTimeout: 'Upload timed out. Please try again.',
+        errInvalidResponse: 'Invalid response from server.',
+        errGeneric: 'Something went wrong.'
+      },
+      de: {
+        title: 'Kostenloses Statisches Website-Hosting',
+        subtitle: 'Datei ablegen. Link erhalten. Sofort. Keine Anmeldung n\u00f6tig.',
+        dropLabel: 'HTML- oder ZIP-Datei hier ablegen',
+        dropHint: 'oder aus deinen Dateien w\u00e4hlen',
+        browse: 'Durchsuchen',
+        uploading: 'Wird hochgeladen...',
+        resultTitle: 'Deine Seite ist online',
+        resultSubtitle: 'Jeder mit dem Link kann sie ansehen',
+        uploadAnother: 'Weitere hochladen',
+        uploadFailed: 'Upload fehlgeschlagen',
+        tryAgain: 'Erneut versuchen',
+        uploadHint: '<span>.html</span> oder <span>.zip</span> &middot; Max. <span>50 MB</span>',
+        howItWorks: 'So funktioniert\u2019s',
+        step1Title: 'Datei ablegen', step1Desc: 'Ziehe eine HTML-Datei oder ein ZIP-Archiv auf den Upload-Bereich.',
+        step2Title: 'Link erhalten', step2Desc: 'Deine Website wird sofort bereitgestellt und du erh\u00e4ltst eine eindeutige URL.',
+        step3Title: 'Teilen', step3Desc: 'Kopiere den Link und teile deine Website mit jedem, \u00fcberall.',
+        aiTitle: 'Gemacht f\u00fcr die KI-Generation',
+        aiDesc: 'Mit einem KI-Tool eine Website erstellt? Sofort hosten. HostMyPage ist der schnellste Weg, KI-generierte statische Websites zu ver\u00f6ffentlichen. Kein Git, kein CLI, keine Deploy-Pipeline.',
+        whyTitle: 'Warum HostMyPage',
+        feat1Title: 'Sofort online', feat1Desc: 'Deine Seite ist in unter einer Sekunde live. Keine Build-Schritte, kein Warten.',
+        feat2Title: 'Keine Anmeldung', feat2Desc: 'Kein Konto, keine E-Mail, kein Passwort. Einfach hochladen und fertig.',
+        feat3Title: 'Ganze Websites', feat3Desc: 'Lade ZIP-Archive mit HTML, CSS, JS, Bildern und anderen statischen Assets hoch.',
+        feat4Title: 'Teilbare Links', feat4Desc: 'Jeder Upload erh\u00e4lt eine einzigartige, saubere URL zum Teilen.',
+        feat5Title: 'Kein Git n\u00f6tig', feat5Desc: 'Kein Terminal. Keine Repositories, keine CLI-Befehle, keine Deploy-Konfiguration.',
+        feat6Title: '100% Kostenlos', feat6Desc: 'Keine versteckten Kosten, keine Premium-Stufen, keine Kreditkarte. Komplett kostenlos.',
+        perfectFor: 'Perfekt f\u00fcr',
+        uc1Title: 'KI-generierte Seiten', uc1Desc: 'HTML aus ChatGPT, Claude oder anderen KI-Tools exportieren und sofort hosten.',
+        uc2Title: 'Portfolios', uc2Desc: 'Teile deine Arbeit mit einer schnellen Portfolio-Seite.',
+        uc3Title: 'Landing Pages', uc3Desc: 'Marketing-Seiten und Kampagnen in Sekunden starten.',
+        uc4Title: 'Dokumentation', uc4Desc: 'Projekt-Dokumentation, Anleitungen und Referenzmaterial ver\u00f6ffentlichen.',
+        uc5Title: 'Studentenprojekte', uc5Desc: 'Klassenprojekte und Aufgaben einreichen und pr\u00e4sentieren.',
+        uc6Title: 'Prototypen', uc6Desc: 'Schnelle Prototypen und Mockups mit dem Team oder Kunden teilen.',
+        faqTitle: 'H\u00e4ufig gestellte Fragen',
+        faq1Q: 'Wie hoste ich eine statische Website kostenlos?',
+        faq1A: 'Ziehe einfach deine HTML-Datei oder dein ZIP-Archiv auf den Upload-Bereich. Du erh\u00e4ltst sofort einen teilbaren Link zu deiner Live-Website. Keine Anmeldung, kein Git, keine Kommandozeile n\u00f6tig.',
+        faq2Q: 'Welche Dateitypen kann ich hochladen?',
+        faq2A: 'HostMyPage akzeptiert einzelne HTML-Dateien (.html, .htm) und ZIP-Archive (.zip) bis zu 50 MB. ZIP-Dateien k\u00f6nnen HTML, CSS, JavaScript, Bilder und andere statische Assets enthalten. Das ZIP muss eine index.html auf der obersten Ebene enthalten.',
+        faq3Q: 'Kann ich eine KI-generierte Website hosten?',
+        faq3A: 'Ja! HostMyPage ist der perfekte Begleiter f\u00fcr KI-Coding-Tools. Exportiere das HTML aus ChatGPT, Claude, v0, Bolt, Lovable oder einem anderen KI-Tool und lade es hier per Drag & Drop hoch.',
+        faq4Q: 'Muss ich ein Konto erstellen?',
+        faq4A: 'Nein. HostMyPage erfordert keine Anmeldung. Einfach Datei hochladen und Link erhalten. Keine E-Mail, kein Passwort, kein Konto n\u00f6tig.',
+        faq5Q: 'Ist HostMyPage wirklich kostenlos?',
+        faq5A: 'Ja, HostMyPage ist komplett kostenlos. Keine versteckten Geb\u00fchren, keine Premium-Stufen, keine Kreditkarte erforderlich.',
+        faq6Q: 'Was ist statisches Website-Hosting?',
+        faq6A: 'Statisches Website-Hosting liefert vorgefertigte HTML-, CSS- und JavaScript-Dateien direkt an Besucher, ohne serverseitige Verarbeitung. Es ist schneller, sicherer und einfacher als dynamisches Hosting.',
+        cookieText: 'Wir verwenden Cookies f\u00fcr Analysen zur Verbesserung unseres Dienstes. Details in unserer <a href="./privacy">Datenschutzerkl\u00e4rung</a>.',
+        cookieDecline: 'Ablehnen', cookieAccept: 'Akzeptieren',
+        footerLine: 'HostMyPage &mdash; Kostenloses statisches Website-Hosting.',
+        footerBlog: 'Blog', footerImprint: 'Impressum', footerPrivacy: 'Datenschutz', footerTerms: 'Nutzungsbedingungen',
+        errFileType: 'Bitte eine HTML- oder ZIP-Datei hochladen.',
+        errSecurityFailed: 'Sicherheits\u00fcberpr\u00fcfung fehlgeschlagen. Bitte Seite neu laden.',
+        errTokenFailed: 'Sicherheitstoken konnte nicht verifiziert werden. Bitte Seite neu laden.',
+        errNetwork: 'Netzwerkfehler. Bitte erneut versuchen.',
+        errTimeout: 'Upload-Zeit\u00fcberschreitung. Bitte erneut versuchen.',
+        errInvalidResponse: 'Ung\u00fcltige Antwort vom Server.',
+        errGeneric: 'Etwas ist schiefgelaufen.'
+      },
+      es: {
+        title: 'Alojamiento Gratuito de Sitios Web Est\u00e1ticos',
+        subtitle: 'Suelta un archivo. Obt\u00e9n un enlace. Al instante. Sin registro.',
+        dropLabel: 'Suelta tu HTML o ZIP aqu\u00ed',
+        dropHint: 'o elige de tus archivos',
+        browse: 'Explorar',
+        uploading: 'Subiendo...',
+        resultTitle: 'Tu sitio est\u00e1 en l\u00ednea',
+        resultSubtitle: 'Cualquiera con el enlace puede verlo',
+        uploadAnother: 'Subir otro',
+        uploadFailed: 'Error al subir',
+        tryAgain: 'Intentar de nuevo',
+        uploadHint: '<span>.html</span> o <span>.zip</span> &middot; M\u00e1x. <span>50 MB</span>',
+        howItWorks: 'C\u00f3mo Funciona',
+        step1Title: 'Suelta tu archivo', step1Desc: 'Arrastra y suelta un archivo HTML o ZIP en el \u00e1rea de carga.',
+        step2Title: 'Obt\u00e9n tu enlace', step2Desc: 'Tu sitio web se despliega al instante y recibes una URL \u00fanica para compartir.',
+        step3Title: 'Comp\u00e1rtelo', step3Desc: 'Copia el enlace y comparte tu sitio web con cualquier persona, en cualquier lugar.',
+        aiTitle: 'Hecho para la Generaci\u00f3n IA',
+        aiDesc: '\u00bfGeneraste un sitio web con una herramienta de IA? Al\u00f3jalo al instante. HostMyPage es la forma m\u00e1s r\u00e1pida de publicar sitios web est\u00e1ticos generados por IA. Sin Git, sin CLI, sin pipeline.',
+        whyTitle: 'Por Qu\u00e9 HostMyPage',
+        feat1Title: 'Despliegue Instant\u00e1neo', feat1Desc: 'Tu sitio est\u00e1 en l\u00ednea en menos de un segundo. Sin compilaci\u00f3n, sin esperas.',
+        feat2Title: 'Sin Registro', feat2Desc: 'Sin cuenta, sin email, sin contrase\u00f1a. Solo sube y listo.',
+        feat3Title: 'Sitios Completos', feat3Desc: 'Sube archivos ZIP con HTML, CSS, JS, im\u00e1genes y otros recursos est\u00e1ticos.',
+        feat4Title: 'Enlaces Compartibles', feat4Desc: 'Cada carga obtiene una URL \u00fanica y limpia que puedes compartir.',
+        feat5Title: 'Sin Git', feat5Desc: 'Sin terminal. Sin repositorios, sin comandos CLI, sin configuraci\u00f3n.',
+        feat6Title: '100% Gratuito', feat6Desc: 'Sin costos ocultos, sin niveles premium, sin tarjeta de cr\u00e9dito. Completamente gratis.',
+        perfectFor: 'Perfecto Para',
+        uc1Title: 'Sitios Generados por IA', uc1Desc: 'Exporta HTML de ChatGPT, Claude o cualquier herramienta de IA y al\u00f3jalo al instante.',
+        uc2Title: 'Portafolios', uc2Desc: 'Comparte tu trabajo con un sitio de portafolio r\u00e1pido y limpio.',
+        uc3Title: 'Landing Pages', uc3Desc: 'Lanza p\u00e1ginas de marketing y campa\u00f1as en segundos.',
+        uc4Title: 'Documentaci\u00f3n', uc4Desc: 'Publica documentaci\u00f3n de proyectos, gu\u00edas y material de referencia.',
+        uc5Title: 'Proyectos Estudiantiles', uc5Desc: 'Entrega y muestra proyectos y tareas de clase.',
+        uc6Title: 'Prototipos', uc6Desc: 'Comparte prototipos r\u00e1pidos y maquetas con tu equipo o clientes.',
+        faqTitle: 'Preguntas Frecuentes',
+        faq1Q: '\u00bfC\u00f3mo alojo un sitio web est\u00e1tico gratis?',
+        faq1A: 'Simplemente arrastra y suelta tu archivo HTML o ZIP en el \u00e1rea de carga. Recibir\u00e1s al instante un enlace compartible a tu sitio web en vivo.',
+        faq2Q: '\u00bfQu\u00e9 tipos de archivos puedo subir?',
+        faq2A: 'HostMyPage acepta archivos HTML (.html, .htm) y archivos ZIP (.zip) de hasta 50 MB. Los ZIP pueden contener HTML, CSS, JavaScript, im\u00e1genes y otros recursos est\u00e1ticos.',
+        faq3Q: '\u00bfPuedo alojar un sitio web generado por IA?',
+        faq3A: '\u00a1S\u00ed! HostMyPage es el compa\u00f1ero perfecto para herramientas de IA. Exporta el HTML de ChatGPT, Claude, v0, Bolt, Lovable o cualquier herramienta de IA.',
+        faq4Q: '\u00bfNecesito crear una cuenta?',
+        faq4A: 'No. HostMyPage no requiere registro. Solo sube tu archivo y obt\u00e9n un enlace. Sin email, sin contrase\u00f1a.',
+        faq5Q: '\u00bfHostMyPage es realmente gratis?',
+        faq5A: 'S\u00ed, HostMyPage es completamente gratuito. Sin tarifas ocultas, sin niveles premium y sin tarjeta de cr\u00e9dito requerida.',
+        faq6Q: '\u00bfQu\u00e9 es el alojamiento de sitios web est\u00e1ticos?',
+        faq6A: 'El alojamiento est\u00e1tico sirve archivos HTML, CSS y JavaScript preconstruidos directamente a los visitantes sin procesamiento del servidor. Es m\u00e1s r\u00e1pido, seguro y simple.',
+        cookieText: 'Usamos cookies de an\u00e1lisis para mejorar nuestro servicio. Consulta nuestra <a href="./privacy">Pol\u00edtica de Privacidad</a>.',
+        cookieDecline: 'Rechazar', cookieAccept: 'Aceptar',
+        footerLine: 'HostMyPage &mdash; Alojamiento gratuito de sitios web est\u00e1ticos.',
+        footerBlog: 'Blog', footerImprint: 'Aviso Legal', footerPrivacy: 'Privacidad', footerTerms: 'T\u00e9rminos',
+        errFileType: 'Por favor sube un archivo HTML o ZIP.',
+        errSecurityFailed: 'Verificaci\u00f3n de seguridad fallida. Recarga la p\u00e1gina.',
+        errTokenFailed: 'No se pudo verificar el token. Recarga la p\u00e1gina.',
+        errNetwork: 'Error de red. Int\u00e9ntalo de nuevo.',
+        errTimeout: 'Tiempo agotado. Int\u00e9ntalo de nuevo.',
+        errInvalidResponse: 'Respuesta inv\u00e1lida del servidor.',
+        errGeneric: 'Algo sali\u00f3 mal.'
+      },
+      fr: {
+        title: 'H\u00e9bergement Gratuit de Sites Statiques',
+        subtitle: 'D\u00e9posez un fichier. Obtenez un lien. Instantan\u00e9ment. Sans inscription.',
+        dropLabel: 'D\u00e9posez votre HTML ou ZIP ici',
+        dropHint: 'ou choisissez dans vos fichiers',
+        browse: 'Parcourir',
+        uploading: 'Envoi en cours...',
+        resultTitle: 'Votre site est en ligne',
+        resultSubtitle: 'Toute personne avec le lien peut le voir',
+        uploadAnother: 'Envoyer un autre',
+        uploadFailed: '\u00c9chec de l\u2019envoi',
+        tryAgain: 'R\u00e9essayer',
+        uploadHint: '<span>.html</span> ou <span>.zip</span> &middot; Max. <span>50 Mo</span>',
+        howItWorks: 'Comment \u00c7a Marche',
+        step1Title: 'D\u00e9posez votre fichier', step1Desc: 'Glissez-d\u00e9posez un fichier HTML ou une archive ZIP sur la zone d\u2019envoi.',
+        step2Title: 'Obtenez votre lien', step2Desc: 'Votre site est d\u00e9ploy\u00e9 instantan\u00e9ment et vous recevez une URL unique.',
+        step3Title: 'Partagez-le', step3Desc: 'Copiez le lien et partagez votre site avec n\u2019importe qui, n\u2019importe o\u00f9.',
+        aiTitle: 'Con\u00e7u pour la G\u00e9n\u00e9ration IA',
+        aiDesc: 'G\u00e9n\u00e9r\u00e9 un site avec un outil d\u2019IA ? H\u00e9bergez-le instantan\u00e9ment. HostMyPage est le moyen le plus rapide de publier des sites statiques g\u00e9n\u00e9r\u00e9s par l\u2019IA. Sans Git, sans CLI.',
+        whyTitle: 'Pourquoi HostMyPage',
+        feat1Title: 'D\u00e9ploiement Instantan\u00e9', feat1Desc: 'Votre site est en ligne en moins d\u2019une seconde. Pas de compilation, pas d\u2019attente.',
+        feat2Title: 'Sans Inscription', feat2Desc: 'Pas de compte, pas d\u2019email, pas de mot de passe. Envoyez et c\u2019est pr\u00eat.',
+        feat3Title: 'Sites Complets', feat3Desc: 'Envoyez des archives ZIP avec HTML, CSS, JS, images et autres ressources statiques.',
+        feat4Title: 'Liens Partageables', feat4Desc: 'Chaque envoi obtient une URL unique et propre \u00e0 partager.',
+        feat5Title: 'Sans Git', feat5Desc: 'Pas de terminal. Pas de d\u00e9p\u00f4ts, pas de commandes CLI, pas de configuration.',
+        feat6Title: '100% Gratuit', feat6Desc: 'Pas de co\u00fbts cach\u00e9s, pas de niveaux premium, pas de carte bancaire. Enti\u00e8rement gratuit.',
+        perfectFor: 'Parfait Pour',
+        uc1Title: 'Sites G\u00e9n\u00e9r\u00e9s par IA', uc1Desc: 'Exportez le HTML de ChatGPT, Claude ou tout outil d\u2019IA et h\u00e9bergez-le instantan\u00e9ment.',
+        uc2Title: 'Portfolios', uc2Desc: 'Partagez votre travail avec un site portfolio rapide et \u00e9l\u00e9gant.',
+        uc3Title: 'Pages d\u2019Atterrissage', uc3Desc: 'Lancez des pages marketing et des campagnes en quelques secondes.',
+        uc4Title: 'Documentation', uc4Desc: 'Publiez la documentation de vos projets, guides et r\u00e9f\u00e9rences.',
+        uc5Title: 'Projets \u00c9tudiants', uc5Desc: 'Soumettez et pr\u00e9sentez vos projets et devoirs.',
+        uc6Title: 'Prototypes', uc6Desc: 'Partagez des prototypes rapides et maquettes avec votre \u00e9quipe ou clients.',
+        faqTitle: 'Questions Fr\u00e9quentes',
+        faq1Q: 'Comment h\u00e9berger un site statique gratuitement ?',
+        faq1A: 'Glissez-d\u00e9posez simplement votre fichier HTML ou archive ZIP. Vous recevrez instantan\u00e9ment un lien partageable vers votre site en ligne.',
+        faq2Q: 'Quels types de fichiers puis-je envoyer ?',
+        faq2A: 'HostMyPage accepte les fichiers HTML (.html, .htm) et les archives ZIP (.zip) jusqu\u2019\u00e0 50 Mo. Les ZIP peuvent contenir HTML, CSS, JavaScript, images et autres ressources statiques.',
+        faq3Q: 'Puis-je h\u00e9berger un site g\u00e9n\u00e9r\u00e9 par IA ?',
+        faq3A: 'Oui ! Exportez le HTML de ChatGPT, Claude, v0, Bolt, Lovable ou tout autre outil IA, puis glissez-d\u00e9posez-le ici.',
+        faq4Q: 'Dois-je cr\u00e9er un compte ?',
+        faq4A: 'Non. HostMyPage ne n\u00e9cessite aucune inscription. Envoyez votre fichier et obtenez un lien.',
+        faq5Q: 'HostMyPage est-il vraiment gratuit ?',
+        faq5A: 'Oui, HostMyPage est enti\u00e8rement gratuit. Pas de frais cach\u00e9s, pas de niveaux premium et pas de carte bancaire requise.',
+        faq6Q: 'Qu\u2019est-ce que l\u2019h\u00e9bergement statique ?',
+        faq6A: 'L\u2019h\u00e9bergement statique sert des fichiers HTML, CSS et JavaScript pr\u00e9construits directement aux visiteurs sans traitement c\u00f4t\u00e9 serveur. Plus rapide, plus s\u00fbr et plus simple.',
+        cookieText: 'Nous utilisons des cookies d\u2019analyse pour am\u00e9liorer notre service. Consultez notre <a href="./privacy">Politique de Confidentialit\u00e9</a>.',
+        cookieDecline: 'Refuser', cookieAccept: 'Accepter',
+        footerLine: 'HostMyPage &mdash; H\u00e9bergement gratuit de sites statiques.',
+        footerBlog: 'Blog', footerImprint: 'Mentions L\u00e9gales', footerPrivacy: 'Confidentialit\u00e9', footerTerms: 'Conditions',
+        errFileType: 'Veuillez envoyer un fichier HTML ou ZIP.',
+        errSecurityFailed: 'V\u00e9rification de s\u00e9curit\u00e9 \u00e9chou\u00e9e. Rechargez la page.',
+        errTokenFailed: 'Impossible de v\u00e9rifier le jeton. Rechargez la page.',
+        errNetwork: 'Erreur r\u00e9seau. R\u00e9essayez.',
+        errTimeout: 'D\u00e9lai d\u2019envoi d\u00e9pass\u00e9. R\u00e9essayez.',
+        errInvalidResponse: 'R\u00e9ponse invalide du serveur.',
+        errGeneric: 'Quelque chose s\u2019est mal pass\u00e9.'
+      },
+      ru: {
+        title: '\u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439 \u0425\u043e\u0441\u0442\u0438\u043d\u0433 \u0421\u0442\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0445 \u0421\u0430\u0439\u0442\u043e\u0432',
+        subtitle: '\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u0444\u0430\u0439\u043b. \u041f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u0441\u0441\u044b\u043b\u043a\u0443. \u041c\u0433\u043d\u043e\u0432\u0435\u043d\u043d\u043e. \u0411\u0435\u0437 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438.',
+        dropLabel: '\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 HTML \u0438\u043b\u0438 ZIP \u0441\u044e\u0434\u0430',
+        dropHint: '\u0438\u043b\u0438 \u0432\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0438\u0437 \u0444\u0430\u0439\u043b\u043e\u0432',
+        browse: '\u041e\u0431\u0437\u043e\u0440',
+        uploading: '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430...',
+        resultTitle: '\u0412\u0430\u0448 \u0441\u0430\u0439\u0442 \u043e\u043d\u043b\u0430\u0439\u043d',
+        resultSubtitle: '\u041b\u044e\u0431\u043e\u0439, \u0443 \u043a\u043e\u0433\u043e \u0435\u0441\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0430, \u043c\u043e\u0436\u0435\u0442 \u0435\u0433\u043e \u0443\u0432\u0438\u0434\u0435\u0442\u044c',
+        uploadAnother: '\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0435\u0449\u0451',
+        uploadFailed: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438',
+        tryAgain: '\u041f\u043e\u043f\u0440\u043e\u0431\u043e\u0432\u0430\u0442\u044c \u0441\u043d\u043e\u0432\u0430',
+        uploadHint: '<span>.html</span> \u0438\u043b\u0438 <span>.zip</span> &middot; \u041c\u0430\u043a\u0441. <span>50 \u041c\u0411</span>',
+        howItWorks: '\u041a\u0430\u043a \u042d\u0442\u043e \u0420\u0430\u0431\u043e\u0442\u0430\u0435\u0442',
+        step1Title: '\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u0444\u0430\u0439\u043b', step1Desc: '\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 HTML-\u0444\u0430\u0439\u043b \u0438\u043b\u0438 ZIP-\u0430\u0440\u0445\u0438\u0432 \u0432 \u043e\u0431\u043b\u0430\u0441\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438.',
+        step2Title: '\u041f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u0441\u0441\u044b\u043b\u043a\u0443', step2Desc: '\u0412\u0430\u0448 \u0441\u0430\u0439\u0442 \u043c\u0433\u043d\u043e\u0432\u0435\u043d\u043d\u043e \u0440\u0430\u0437\u0432\u0451\u0440\u043d\u0443\u0442, \u0438 \u0432\u044b \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u0443\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u0443\u044e URL.',
+        step3Title: '\u041f\u043e\u0434\u0435\u043b\u0438\u0442\u0435\u0441\u044c', step3Desc: '\u0421\u043a\u043e\u043f\u0438\u0440\u0443\u0439\u0442\u0435 \u0441\u0441\u044b\u043b\u043a\u0443 \u0438 \u043f\u043e\u0434\u0435\u043b\u0438\u0442\u0435\u0441\u044c \u0441\u0432\u043e\u0438\u043c \u0441\u0430\u0439\u0442\u043e\u043c \u0441 \u043a\u0435\u043c \u0443\u0433\u043e\u0434\u043d\u043e.',
+        aiTitle: '\u0421\u043e\u0437\u0434\u0430\u043d\u043e \u0434\u043b\u044f \u041f\u043e\u043a\u043e\u043b\u0435\u043d\u0438\u044f \u0418\u0418',
+        aiDesc: '\u0421\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u043b\u0438 \u0441\u0430\u0439\u0442 \u0441 \u043f\u043e\u043c\u043e\u0449\u044c\u044e \u0418\u0418? \u0420\u0430\u0437\u043c\u0435\u0441\u0442\u0438\u0442\u0435 \u043c\u0433\u043d\u043e\u0432\u0435\u043d\u043d\u043e. HostMyPage \u2014 \u0441\u0430\u043c\u044b\u0439 \u0431\u044b\u0441\u0442\u0440\u044b\u0439 \u0441\u043f\u043e\u0441\u043e\u0431 \u043f\u0443\u0431\u043b\u0438\u043a\u0430\u0446\u0438\u0438 \u0441\u0442\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0445 \u0441\u0430\u0439\u0442\u043e\u0432 \u043e\u0442 \u0418\u0418. \u0411\u0435\u0437 Git, \u0431\u0435\u0437 CLI.',
+        whyTitle: '\u041f\u043e\u0447\u0435\u043c\u0443 HostMyPage',
+        feat1Title: '\u041c\u0433\u043d\u043e\u0432\u0435\u043d\u043d\u044b\u0439 \u0414\u0435\u043f\u043b\u043e\u0439', feat1Desc: '\u0412\u0430\u0448 \u0441\u0430\u0439\u0442 \u043e\u043d\u043b\u0430\u0439\u043d \u043c\u0435\u043d\u0435\u0435 \u0447\u0435\u043c \u0437\u0430 \u0441\u0435\u043a\u0443\u043d\u0434\u0443. \u0411\u0435\u0437 \u0441\u0431\u043e\u0440\u043a\u0438, \u0431\u0435\u0437 \u043e\u0436\u0438\u0434\u0430\u043d\u0438\u044f.',
+        feat2Title: '\u0411\u0435\u0437 \u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0430\u0446\u0438\u0438', feat2Desc: '\u0411\u0435\u0437 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430, \u0431\u0435\u0437 email, \u0431\u0435\u0437 \u043f\u0430\u0440\u043e\u043b\u044f. \u041f\u0440\u043e\u0441\u0442\u043e \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0438 \u0433\u043e\u0442\u043e\u0432\u043e.',
+        feat3Title: '\u041f\u043e\u043b\u043d\u044b\u0435 \u0421\u0430\u0439\u0442\u044b', feat3Desc: '\u0417\u0430\u0433\u0440\u0443\u0436\u0430\u0439\u0442\u0435 ZIP \u0441 HTML, CSS, JS, \u0438\u0437\u043e\u0431\u0440\u0430\u0436\u0435\u043d\u0438\u044f\u043c\u0438 \u0438 \u0434\u0440\u0443\u0433\u0438\u043c\u0438 \u0440\u0435\u0441\u0443\u0440\u0441\u0430\u043c\u0438.',
+        feat4Title: '\u0421\u0441\u044b\u043b\u043a\u0438 \u0434\u043b\u044f \u041e\u0431\u043c\u0435\u043d\u0430', feat4Desc: '\u041a\u0430\u0436\u0434\u0430\u044f \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043f\u043e\u043b\u0443\u0447\u0430\u0435\u0442 \u0443\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u044b\u0439 URL \u0434\u043b\u044f \u043e\u0431\u043c\u0435\u043d\u0430.',
+        feat5Title: '\u0411\u0435\u0437 Git', feat5Desc: '\u0411\u0435\u0437 \u0442\u0435\u0440\u043c\u0438\u043d\u0430\u043b\u0430. \u0411\u0435\u0437 \u0440\u0435\u043f\u043e\u0437\u0438\u0442\u043e\u0440\u0438\u0435\u0432, \u0431\u0435\u0437 CLI, \u0431\u0435\u0437 \u043a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438.',
+        feat6Title: '100% \u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u043e', feat6Desc: '\u0411\u0435\u0437 \u0441\u043a\u0440\u044b\u0442\u044b\u0445 \u0440\u0430\u0441\u0445\u043e\u0434\u043e\u0432, \u0431\u0435\u0437 \u043f\u0440\u0435\u043c\u0438\u0443\u043c-\u043f\u043b\u0430\u043d\u043e\u0432, \u0431\u0435\u0437 \u043a\u0440\u0435\u0434\u0438\u0442\u043d\u043e\u0439 \u043a\u0430\u0440\u0442\u044b. \u041f\u043e\u043b\u043d\u043e\u0441\u0442\u044c\u044e \u0431\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u043e.',
+        perfectFor: '\u0418\u0434\u0435\u0430\u043b\u044c\u043d\u043e \u0414\u043b\u044f',
+        uc1Title: '\u0421\u0430\u0439\u0442\u044b \u043e\u0442 \u0418\u0418', uc1Desc: '\u042d\u043a\u0441\u043f\u043e\u0440\u0442\u0438\u0440\u0443\u0439\u0442\u0435 HTML \u0438\u0437 ChatGPT, Claude \u0438\u043b\u0438 \u043b\u044e\u0431\u043e\u0433\u043e \u0418\u0418 \u0438 \u0440\u0430\u0437\u043c\u0435\u0441\u0442\u0438\u0442\u0435 \u043c\u0433\u043d\u043e\u0432\u0435\u043d\u043d\u043e.',
+        uc2Title: '\u041f\u043e\u0440\u0442\u0444\u043e\u043b\u0438\u043e', uc2Desc: '\u041f\u043e\u0434\u0435\u043b\u0438\u0442\u0435\u0441\u044c \u0440\u0430\u0431\u043e\u0442\u043e\u0439 \u0441 \u0431\u044b\u0441\u0442\u0440\u044b\u043c \u0441\u0430\u0439\u0442\u043e\u043c-\u043f\u043e\u0440\u0442\u0444\u043e\u043b\u0438\u043e.',
+        uc3Title: '\u041b\u0435\u043d\u0434\u0438\u043d\u0433\u0438', uc3Desc: '\u0417\u0430\u043f\u0443\u0441\u043a\u0430\u0439\u0442\u0435 \u043c\u0430\u0440\u043a\u0435\u0442\u0438\u043d\u0433\u043e\u0432\u044b\u0435 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b \u0438 \u043a\u0430\u043c\u043f\u0430\u043d\u0438\u0438 \u0437\u0430 \u0441\u0435\u043a\u0443\u043d\u0434\u044b.',
+        uc4Title: '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044f', uc4Desc: '\u041f\u0443\u0431\u043b\u0438\u043a\u0443\u0439\u0442\u0435 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u044e, \u0440\u0443\u043a\u043e\u0432\u043e\u0434\u0441\u0442\u0432\u0430 \u0438 \u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u044b\u0435 \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b.',
+        uc5Title: '\u0421\u0442\u0443\u0434\u0435\u043d\u0447\u0435\u0441\u043a\u0438\u0435 \u041f\u0440\u043e\u0435\u043a\u0442\u044b', uc5Desc: '\u0421\u0434\u0430\u0432\u0430\u0439\u0442\u0435 \u0438 \u043f\u043e\u043a\u0430\u0437\u044b\u0432\u0430\u0439\u0442\u0435 \u0443\u0447\u0435\u0431\u043d\u044b\u0435 \u043f\u0440\u043e\u0435\u043a\u0442\u044b \u0438 \u0437\u0430\u0434\u0430\u043d\u0438\u044f.',
+        uc6Title: '\u041f\u0440\u043e\u0442\u043e\u0442\u0438\u043f\u044b', uc6Desc: '\u0414\u0435\u043b\u0438\u0442\u0435\u0441\u044c \u043f\u0440\u043e\u0442\u043e\u0442\u0438\u043f\u0430\u043c\u0438 \u0438 \u043c\u0430\u043a\u0435\u0442\u0430\u043c\u0438 \u0441 \u043a\u043e\u043c\u0430\u043d\u0434\u043e\u0439 \u0438\u043b\u0438 \u043a\u043b\u0438\u0435\u043d\u0442\u0430\u043c\u0438.',
+        faqTitle: '\u0427\u0430\u0441\u0442\u043e \u0417\u0430\u0434\u0430\u0432\u0430\u0435\u043c\u044b\u0435 \u0412\u043e\u043f\u0440\u043e\u0441\u044b',
+        faq1Q: '\u041a\u0430\u043a \u0431\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u043e \u0440\u0430\u0437\u043c\u0435\u0441\u0442\u0438\u0442\u044c \u0441\u0442\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0441\u0430\u0439\u0442?',
+        faq1A: '\u041f\u0440\u043e\u0441\u0442\u043e \u043f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 HTML-\u0444\u0430\u0439\u043b \u0438\u043b\u0438 ZIP-\u0430\u0440\u0445\u0438\u0432 \u0432 \u043e\u0431\u043b\u0430\u0441\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438. \u0412\u044b \u043c\u0433\u043d\u043e\u0432\u0435\u043d\u043d\u043e \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u0441\u0441\u044b\u043b\u043a\u0443 \u043d\u0430 \u0432\u0430\u0448 \u0441\u0430\u0439\u0442.',
+        faq2Q: '\u041a\u0430\u043a\u0438\u0435 \u0442\u0438\u043f\u044b \u0444\u0430\u0439\u043b\u043e\u0432 \u043c\u043e\u0436\u043d\u043e \u0437\u0430\u0433\u0440\u0443\u0436\u0430\u0442\u044c?',
+        faq2A: 'HostMyPage \u043f\u0440\u0438\u043d\u0438\u043c\u0430\u0435\u0442 HTML-\u0444\u0430\u0439\u043b\u044b (.html, .htm) \u0438 ZIP-\u0430\u0440\u0445\u0438\u0432\u044b (.zip) \u0440\u0430\u0437\u043c\u0435\u0440\u043e\u043c \u0434\u043e 50 \u041c\u0411. ZIP \u0434\u043e\u043b\u0436\u0435\u043d \u0441\u043e\u0434\u0435\u0440\u0436\u0430\u0442\u044c index.html \u043d\u0430 \u0432\u0435\u0440\u0445\u043d\u0435\u043c \u0443\u0440\u043e\u0432\u043d\u0435.',
+        faq3Q: '\u041c\u043e\u0436\u043d\u043e \u0440\u0430\u0437\u043c\u0435\u0441\u0442\u0438\u0442\u044c \u0441\u0430\u0439\u0442 \u043e\u0442 \u0418\u0418?',
+        faq3A: '\u0414\u0430! \u042d\u043a\u0441\u043f\u043e\u0440\u0442\u0438\u0440\u0443\u0439\u0442\u0435 HTML \u0438\u0437 ChatGPT, Claude, v0, Bolt, Lovable \u0438\u043b\u0438 \u043b\u044e\u0431\u043e\u0433\u043e \u0418\u0418-\u0438\u043d\u0441\u0442\u0440\u0443\u043c\u0435\u043d\u0442\u0430 \u0438 \u043f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u0441\u044e\u0434\u0430.',
+        faq4Q: '\u041d\u0443\u0436\u043d\u043e \u0441\u043e\u0437\u0434\u0430\u0432\u0430\u0442\u044c \u0430\u043a\u043a\u0430\u0443\u043d\u0442?',
+        faq4A: '\u041d\u0435\u0442. \u041f\u0440\u043e\u0441\u0442\u043e \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0444\u0430\u0439\u043b \u0438 \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u0441\u0441\u044b\u043b\u043a\u0443. \u0411\u0435\u0437 email, \u0431\u0435\u0437 \u043f\u0430\u0440\u043e\u043b\u044f, \u0431\u0435\u0437 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u0430.',
+        faq5Q: 'HostMyPage \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0442\u0435\u043b\u044c\u043d\u043e \u0431\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439?',
+        faq5A: '\u0414\u0430, \u043f\u043e\u043b\u043d\u043e\u0441\u0442\u044c\u044e \u0431\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439. \u0411\u0435\u0437 \u0441\u043a\u0440\u044b\u0442\u044b\u0445 \u043f\u043b\u0430\u0442\u0435\u0436\u0435\u0439 \u0438 \u0431\u0435\u0437 \u043a\u0440\u0435\u0434\u0438\u0442\u043d\u043e\u0439 \u043a\u0430\u0440\u0442\u044b.',
+        faq6Q: '\u0427\u0442\u043e \u0442\u0430\u043a\u043e\u0435 \u0441\u0442\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0445\u043e\u0441\u0442\u0438\u043d\u0433?',
+        faq6A: '\u0421\u0442\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0445\u043e\u0441\u0442\u0438\u043d\u0433 \u0434\u043e\u0441\u0442\u0430\u0432\u043b\u044f\u0435\u0442 \u0433\u043e\u0442\u043e\u0432\u044b\u0435 HTML, CSS \u0438 JS \u0444\u0430\u0439\u043b\u044b \u043d\u0430\u043f\u0440\u044f\u043c\u0443\u044e \u043f\u043e\u0441\u0435\u0442\u0438\u0442\u0435\u043b\u044f\u043c. \u0411\u044b\u0441\u0442\u0440\u0435\u0435, \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u0435\u0435 \u0438 \u043f\u0440\u043e\u0449\u0435 \u0434\u0438\u043d\u0430\u043c\u0438\u0447\u0435\u0441\u043a\u043e\u0433\u043e.',
+        cookieText: '\u041c\u044b \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0435\u043c \u0430\u043d\u0430\u043b\u0438\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0435 cookies. \u041f\u043e\u0434\u0440\u043e\u0431\u043d\u0435\u0435 \u0432 <a href="./privacy">\u041f\u043e\u043b\u0438\u0442\u0438\u043a\u0435 \u041a\u043e\u043d\u0444\u0438\u0434\u0435\u043d\u0446\u0438\u0430\u043b\u044c\u043d\u043e\u0441\u0442\u0438</a>.',
+        cookieDecline: '\u041e\u0442\u043a\u043b\u043e\u043d\u0438\u0442\u044c', cookieAccept: '\u041f\u0440\u0438\u043d\u044f\u0442\u044c',
+        footerLine: 'HostMyPage &mdash; \u0411\u0435\u0441\u043f\u043b\u0430\u0442\u043d\u044b\u0439 \u0445\u043e\u0441\u0442\u0438\u043d\u0433 \u0441\u0442\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0445 \u0441\u0430\u0439\u0442\u043e\u0432.',
+        footerBlog: '\u0411\u043b\u043e\u0433', footerImprint: '\u0418\u043c\u043f\u0440\u0435\u0441\u0441\u0443\u043c', footerPrivacy: '\u041a\u043e\u043d\u0444\u0438\u0434\u0435\u043d\u0446\u0438\u0430\u043b\u044c\u043d\u043e\u0441\u0442\u044c', footerTerms: '\u0423\u0441\u043b\u043e\u0432\u0438\u044f',
+        errFileType: '\u041f\u043e\u0436\u0430\u043b\u0443\u0439\u0441\u0442\u0430, \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 HTML \u0438\u043b\u0438 ZIP \u0444\u0430\u0439\u043b.',
+        errSecurityFailed: '\u041f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u0438 \u043d\u0435 \u043f\u0440\u043e\u0439\u0434\u0435\u043d\u0430. \u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0443.',
+        errTokenFailed: '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0442\u043e\u043a\u0435\u043d. \u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0443.',
+        errNetwork: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0441\u0435\u0442\u0438. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0441\u043d\u043e\u0432\u0430.',
+        errTimeout: '\u0412\u0440\u0435\u043c\u044f \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0438\u0441\u0442\u0435\u043a\u043b\u043e. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0441\u043d\u043e\u0432\u0430.',
+        errInvalidResponse: '\u041d\u0435\u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\u044b\u0439 \u043e\u0442\u0432\u0435\u0442 \u043e\u0442 \u0441\u0435\u0440\u0432\u0435\u0440\u0430.',
+        errGeneric: '\u0427\u0442\u043e-\u0442\u043e \u043f\u043e\u0448\u043b\u043e \u043d\u0435 \u0442\u0430\u043a.'
+      },
+      zh: {
+        title: '\u514d\u8d39\u9759\u6001\u7f51\u7ad9\u6258\u7ba1',
+        subtitle: '\u62d6\u653e\u6587\u4ef6\uff0c\u83b7\u53d6\u94fe\u63a5\uff0c\u5373\u65f6\u4e0a\u7ebf\u3002\u65e0\u9700\u6ce8\u518c\u3002',
+        dropLabel: '\u5c06HTML\u6216ZIP\u6587\u4ef6\u62d6\u653e\u5230\u8fd9\u91cc',
+        dropHint: '\u6216\u4ece\u6587\u4ef6\u4e2d\u9009\u62e9',
+        browse: '\u6d4f\u89c8',
+        uploading: '\u4e0a\u4f20\u4e2d...',
+        resultTitle: '\u60a8\u7684\u7f51\u7ad9\u5df2\u4e0a\u7ebf',
+        resultSubtitle: '\u4efb\u4f55\u4eba\u90fd\u53ef\u4ee5\u901a\u8fc7\u94fe\u63a5\u8bbf\u95ee',
+        uploadAnother: '\u4e0a\u4f20\u53e6\u4e00\u4e2a',
+        uploadFailed: '\u4e0a\u4f20\u5931\u8d25',
+        tryAgain: '\u91cd\u8bd5',
+        uploadHint: '<span>.html</span> \u6216 <span>.zip</span> &middot; \u6700\u5927 <span>50 MB</span>',
+        howItWorks: '\u4f7f\u7528\u65b9\u6cd5',
+        step1Title: '\u62d6\u653e\u6587\u4ef6', step1Desc: '\u5c06HTML\u6587\u4ef6\u6216ZIP\u538b\u7f29\u5305\u62d6\u653e\u5230\u4e0a\u4f20\u533a\u57df\u3002',
+        step2Title: '\u83b7\u53d6\u94fe\u63a5', step2Desc: '\u60a8\u7684\u7f51\u7ad9\u5373\u65f6\u90e8\u7f72\uff0c\u60a8\u5c06\u83b7\u5f97\u4e00\u4e2a\u552f\u4e00\u7684\u53ef\u5206\u4eabURL\u3002',
+        step3Title: '\u5206\u4eab', step3Desc: '\u590d\u5236\u94fe\u63a5\uff0c\u968f\u65f6\u968f\u5730\u4e0e\u4efb\u4f55\u4eba\u5206\u4eab\u60a8\u7684\u7f51\u7ad9\u3002',
+        aiTitle: '\u4e3aAI\u65f6\u4ee3\u800c\u751f',
+        aiDesc: '\u7528AI\u5de5\u5177\u751f\u6210\u4e86\u7f51\u7ad9\uff1f\u5373\u65f6\u6258\u7ba1\u3002HostMyPage\u662f\u53d1\u5e03AI\u751f\u6210\u9759\u6001\u7f51\u7ad9\u7684\u6700\u5feb\u65b9\u5f0f\u3002\u65e0\u9700Git\u3001CLI\u6216\u90e8\u7f72\u7ba1\u9053\u3002',
+        whyTitle: '\u4e3a\u4ec0\u4e48\u9009\u62e9 HostMyPage',
+        feat1Title: '\u5373\u65f6\u90e8\u7f72', feat1Desc: '\u60a8\u7684\u7f51\u7ad9\u5728\u4e00\u79d2\u5185\u4e0a\u7ebf\u3002\u65e0\u9700\u6784\u5efa\uff0c\u65e0\u9700\u7b49\u5f85\u3002',
+        feat2Title: '\u65e0\u9700\u6ce8\u518c', feat2Desc: '\u65e0\u9700\u8d26\u6237\u3001\u90ae\u7bb1\u6216\u5bc6\u7801\u3002\u4e0a\u4f20\u5373\u53ef\u3002',
+        feat3Title: '\u5b8c\u6574\u7f51\u7ad9', feat3Desc: '\u4e0a\u4f20\u5305\u542bHTML\u3001CSS\u3001JS\u3001\u56fe\u7247\u548c\u5176\u4ed6\u9759\u6001\u8d44\u6e90\u7684ZIP\u538b\u7f29\u5305\u3002',
+        feat4Title: '\u53ef\u5206\u4eab\u94fe\u63a5', feat4Desc: '\u6bcf\u6b21\u4e0a\u4f20\u90fd\u83b7\u5f97\u4e00\u4e2a\u72ec\u7279\u3001\u7b80\u6d01\u7684URL\u3002',
+        feat5Title: '\u65e0\u9700Git', feat5Desc: '\u65e0\u9700\u7ec8\u7aef\u3001\u4ed3\u5e93\u3001CLI\u547d\u4ee4\u6216\u90e8\u7f72\u914d\u7f6e\u3002',
+        feat6Title: '100%\u514d\u8d39', feat6Desc: '\u65e0\u9690\u85cf\u8d39\u7528\uff0c\u65e0\u9ad8\u7ea7\u7248\uff0c\u65e0\u9700\u4fe1\u7528\u5361\u3002\u5b8c\u5168\u514d\u8d39\u3002',
+        perfectFor: '\u9002\u7528\u573a\u666f',
+        uc1Title: 'AI\u751f\u6210\u7684\u7f51\u7ad9', uc1Desc: '\u4eceChatGPT\u3001Claude\u6216\u4efb\u4f55AI\u5de5\u5177\u5bfc\u51faHTML\u5e76\u5373\u65f6\u6258\u7ba1\u3002',
+        uc2Title: '\u4f5c\u54c1\u96c6', uc2Desc: '\u7528\u7b80\u6d01\u3001\u5feb\u901f\u7684\u4f5c\u54c1\u96c6\u7f51\u7ad9\u5c55\u793a\u60a8\u7684\u5de5\u4f5c\u3002',
+        uc3Title: '\u7740\u9646\u9875', uc3Desc: '\u5728\u51e0\u79d2\u5185\u542f\u52a8\u8425\u9500\u9875\u9762\u548c\u6d3b\u52a8\u3002',
+        uc4Title: '\u6587\u6863', uc4Desc: '\u53d1\u5e03\u9879\u76ee\u6587\u6863\u3001\u6307\u5357\u548c\u53c2\u8003\u8d44\u6599\u3002',
+        uc5Title: '\u5b66\u751f\u9879\u76ee', uc5Desc: '\u63d0\u4ea4\u548c\u5c55\u793a\u8bfe\u7a0b\u9879\u76ee\u548c\u4f5c\u4e1a\u3002',
+        uc6Title: '\u539f\u578b', uc6Desc: '\u4e0e\u56e2\u961f\u6216\u5ba2\u6237\u5206\u4eab\u5feb\u901f\u539f\u578b\u548c\u6a21\u578b\u3002',
+        faqTitle: '\u5e38\u89c1\u95ee\u9898',
+        faq1Q: '\u5982\u4f55\u514d\u8d39\u6258\u7ba1\u9759\u6001\u7f51\u7ad9\uff1f',
+        faq1A: '\u53ea\u9700\u5c06HTML\u6587\u4ef6\u6216ZIP\u538b\u7f29\u5305\u62d6\u653e\u5230\u4e0a\u4f20\u533a\u57df\u3002\u60a8\u5c06\u5373\u65f6\u83b7\u5f97\u4e00\u4e2a\u53ef\u5206\u4eab\u7684\u94fe\u63a5\u3002',
+        faq2Q: '\u53ef\u4ee5\u4e0a\u4f20\u54ea\u4e9b\u6587\u4ef6\u7c7b\u578b\uff1f',
+        faq2A: 'HostMyPage\u63a5\u53d7HTML\u6587\u4ef6\uff08.html\u3001.htm\uff09\u548c\u6700\u592750 MB\u7684ZIP\u538b\u7f29\u5305\u3002ZIP\u5fc5\u987b\u5728\u6839\u76ee\u5f55\u5305\u542bindex.html\u3002',
+        faq3Q: '\u53ef\u4ee5\u6258\u7ba1AI\u751f\u6210\u7684\u7f51\u7ad9\u5417\uff1f',
+        faq3A: '\u53ef\u4ee5\uff01\u4eceChatGPT\u3001Claude\u3001v0\u3001Bolt\u3001Lovable\u6216\u4efb\u4f55AI\u5de5\u5177\u5bfc\u51faHTML\uff0c\u7136\u540e\u62d6\u653e\u5230\u8fd9\u91cc\u5373\u53ef\u3002',
+        faq4Q: '\u9700\u8981\u521b\u5efa\u8d26\u6237\u5417\uff1f',
+        faq4A: '\u4e0d\u9700\u8981\u3002\u53ea\u9700\u4e0a\u4f20\u6587\u4ef6\u5373\u53ef\u83b7\u5f97\u94fe\u63a5\u3002\u65e0\u9700\u90ae\u7bb1\u3001\u5bc6\u7801\u6216\u8d26\u6237\u3002',
+        faq5Q: 'HostMyPage\u771f\u7684\u514d\u8d39\u5417\uff1f',
+        faq5A: '\u662f\u7684\uff0c\u5b8c\u5168\u514d\u8d39\u3002\u6ca1\u6709\u9690\u85cf\u8d39\u7528\uff0c\u4e0d\u9700\u8981\u4fe1\u7528\u5361\u3002',
+        faq6Q: '\u4ec0\u4e48\u662f\u9759\u6001\u7f51\u7ad9\u6258\u7ba1\uff1f',
+        faq6A: '\u9759\u6001\u6258\u7ba1\u5c06\u9884\u6784\u5efa\u7684HTML\u3001CSS\u548cJS\u6587\u4ef6\u76f4\u63a5\u63d0\u4f9b\u7ed9\u8bbf\u95ee\u8005\uff0c\u65e0\u9700\u670d\u52a1\u5668\u5904\u7406\u3002\u66f4\u5feb\u3001\u66f4\u5b89\u5168\u3001\u66f4\u7b80\u5355\u3002',
+        cookieText: '\u6211\u4eec\u4f7f\u7528\u5206\u6790cookies\u6765\u6539\u5584\u670d\u52a1\u3002\u8be6\u60c5\u8bf7\u53c2\u9605<a href="./privacy">\u9690\u79c1\u653f\u7b56</a>\u3002',
+        cookieDecline: '\u62d2\u7edd', cookieAccept: '\u63a5\u53d7',
+        footerLine: 'HostMyPage &mdash; \u514d\u8d39\u9759\u6001\u7f51\u7ad9\u6258\u7ba1\u3002',
+        footerBlog: '\u535a\u5ba2', footerImprint: '\u6cd5\u5f8b\u58f0\u660e', footerPrivacy: '\u9690\u79c1\u653f\u7b56', footerTerms: '\u670d\u52a1\u6761\u6b3e',
+        errFileType: '\u8bf7\u4e0a\u4f20HTML\u6216ZIP\u6587\u4ef6\u3002',
+        errSecurityFailed: '\u5b89\u5168\u9a8c\u8bc1\u5931\u8d25\u3002\u8bf7\u91cd\u65b0\u52a0\u8f7d\u9875\u9762\u3002',
+        errTokenFailed: '\u65e0\u6cd5\u9a8c\u8bc1\u5b89\u5168\u4ee4\u724c\u3002\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002',
+        errNetwork: '\u7f51\u7edc\u9519\u8bef\u3002\u8bf7\u91cd\u8bd5\u3002',
+        errTimeout: '\u4e0a\u4f20\u8d85\u65f6\u3002\u8bf7\u91cd\u8bd5\u3002',
+        errInvalidResponse: '\u670d\u52a1\u5668\u54cd\u5e94\u65e0\u6548\u3002',
+        errGeneric: '\u51fa\u73b0\u9519\u8bef\u3002'
+      }
+    };
+
+    let currentLang = localStorage.getItem('lang') || 'en';
+
+    function applyLanguage(lang) {
+      const t = i18n[lang];
+      if (!t) return;
+      currentLang = lang;
+      localStorage.setItem('lang', lang);
+      document.documentElement.lang = lang;
+
+      // Active button
+      document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+
+      // Hero
+      document.querySelector('h1').textContent = t.title;
+      document.querySelector('.subtitle').textContent = t.subtitle;
+
+      // Drop zone
+      document.querySelector('.drop-label').textContent = t.dropLabel;
+      document.querySelector('.drop-hint').textContent = t.dropHint;
+      document.querySelector('.browse-text').textContent = t.browse;
+
+      // Upload state
+      document.querySelector('.upload-text').textContent = t.uploading;
+
+      // Result state
+      document.querySelector('.result-title').textContent = t.resultTitle;
+      document.querySelector('.result-subtitle').textContent = t.resultSubtitle;
+      newUploadBtn.textContent = t.uploadAnother;
+
+      // Error state
+      document.querySelector('.error-title').textContent = t.uploadFailed;
+      retryBtn.textContent = t.tryAgain;
+
+      // Upload hint
+      document.querySelector('.upload-hint').innerHTML = t.uploadHint;
+
+      // How It Works
+      const steps = document.querySelectorAll('.step');
+      const sectionHeadings = document.querySelectorAll('.content > section > h2');
+      if (sectionHeadings[0]) sectionHeadings[0].textContent = t.howItWorks;
+      if (steps[0]) { steps[0].querySelector('h3').textContent = t.step1Title; steps[0].querySelector('p').textContent = t.step1Desc; }
+      if (steps[1]) { steps[1].querySelector('h3').textContent = t.step2Title; steps[1].querySelector('p').textContent = t.step2Desc; }
+      if (steps[2]) { steps[2].querySelector('h3').textContent = t.step3Title; steps[2].querySelector('p').textContent = t.step3Desc; }
+
+      // AI Callout
+      const aiCallout = document.querySelector('.ai-callout');
+      if (aiCallout) {
+        aiCallout.querySelector('h2').textContent = t.aiTitle;
+        aiCallout.querySelector('p').textContent = t.aiDesc;
+      }
+
+      // Features
+      const featureH2 = document.querySelector('.features')?.closest('section')?.querySelector('h2');
+      if (featureH2) featureH2.textContent = t.whyTitle;
+      const feats = document.querySelectorAll('.feature');
+      const featKeys = ['feat1','feat2','feat3','feat4','feat5','feat6'];
+      feats.forEach((f, i) => {
+        if (featKeys[i]) {
+          f.querySelector('h3').textContent = t[featKeys[i] + 'Title'];
+          f.querySelector('p').textContent = t[featKeys[i] + 'Desc'];
+        }
+      });
+
+      // Use cases
+      const ucH2 = document.querySelector('.use-cases')?.closest('section')?.querySelector('h2');
+      if (ucH2) ucH2.textContent = t.perfectFor;
+      const ucs = document.querySelectorAll('.use-case');
+      const ucKeys = ['uc1','uc2','uc3','uc4','uc5','uc6'];
+      ucs.forEach((u, i) => {
+        if (ucKeys[i]) {
+          u.querySelector('h3').textContent = t[ucKeys[i] + 'Title'];
+          u.querySelector('p').textContent = t[ucKeys[i] + 'Desc'];
+        }
+      });
+
+      // FAQ
+      const faqH2 = document.querySelector('.faq-list')?.closest('section')?.querySelector('h2');
+      if (faqH2) faqH2.textContent = t.faqTitle;
+      const faqs = document.querySelectorAll('.faq-item');
+      for (let i = 0; i < faqs.length; i++) {
+        const key = 'faq' + (i + 1);
+        if (t[key + 'Q']) faqs[i].querySelector('.faq-question span').textContent = t[key + 'Q'];
+        if (t[key + 'A']) faqs[i].querySelector('.faq-answer-inner').textContent = t[key + 'A'];
+      }
+
+      // Cookie banner
+      document.querySelector('.cookie-text').innerHTML = t.cookieText;
+      document.getElementById('cookieDecline').textContent = t.cookieDecline;
+      document.getElementById('cookieAccept').textContent = t.cookieAccept;
+
+      // Footer
+      const footerPs = document.querySelectorAll('.site-footer p');
+      if (footerPs[0]) footerPs[0].innerHTML = t.footerLine;
+      if (footerPs[1]) {
+        const links = footerPs[1].querySelectorAll('a');
+        if (links[0]) links[0].textContent = t.footerBlog;
+        if (links[1]) links[1].textContent = t.footerImprint;
+        if (links[2]) links[2].textContent = t.footerPrivacy;
+        if (links[3]) links[3].textContent = t.footerTerms;
+      }
+    }
+
+    // Language switcher event
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+    });
+
+    // Apply saved language on load
+    if (currentLang !== 'en') applyLanguage(currentLang);
+
+    // Expose current translations for error messages
+    function t(key) { return i18n[currentLang]?.[key] || i18n.en[key] || key; }
   </script>
 </body>
 </html>
