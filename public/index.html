@@ -2016,11 +2016,19 @@
     }
 
     // Language switcher event
+    // When served via subdomains, buttons are replaced with <a> links by the server.
+    // On local dev (no subdomains), intercept clicks and apply language client-side.
     document.querySelectorAll('.lang-btn').forEach(btn => {
-      btn.addEventListener('click', () => applyLanguage(btn.dataset.lang));
+      btn.addEventListener('click', (e) => {
+        // If this is an <a> tag with an href to a different subdomain, let it navigate
+        if (btn.tagName === 'A' && btn.href && !btn.href.includes(location.host)) return;
+        // Otherwise apply client-side (local dev fallback)
+        e.preventDefault();
+        applyLanguage(btn.dataset.lang);
+      });
     });
 
-    // Apply saved language on load
+    // Apply saved/detected language on load
     if (currentLang !== 'en') applyLanguage(currentLang);
 
     // Expose current translations for error messages
