@@ -345,6 +345,7 @@ function serveWithHreflang(pagePath, filePath) {
 serveWithHreflang('/imprint', path.join(__dirname, 'public', 'imprint.html'));
 serveWithHreflang('/privacy', path.join(__dirname, 'public', 'privacy.html'));
 serveWithHreflang('/terms', path.join(__dirname, 'public', 'terms.html'));
+serveWithHreflang('/disclaimer', path.join(__dirname, 'public', 'disclaimer.html'));
 serveWithHreflang('/blog/', path.join(__dirname, 'public', 'blog', 'index.html'));
 
 // Blog articles with hreflang
