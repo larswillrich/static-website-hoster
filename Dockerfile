@@ -12,7 +12,7 @@ COPY scripts/ ./scripts/
 # Generate OG image PNG from SVG at build time
 RUN node scripts/generate-og.js
 
-RUN mkdir -p /app/uploads /tmp/uploads
+RUN mkdir -p /app/uploads /tmp/uploads /app/data/analytics
 
 EXPOSE 3000
 

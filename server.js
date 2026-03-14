@@ -11,8 +11,69 @@ app.enable('strict routing');
 const PORT = process.env.PORT || 3000;
 const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, ''); // e.g. "/staticwebsite"
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const ANALYTICS_DIR = path.join(__dirname, 'data', 'analytics');
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
+
+// --- Analytics logging (DSGVO-compliant, no cookies, hashed IPs) ---
+if (!fs.existsSync(ANALYTICS_DIR)) {
+  fs.mkdirSync(ANALYTICS_DIR, { recursive: true });
+}
+
+// Daily rotating salt for IP hashing (not stored, regenerated daily)
+let _analyticsSalt = crypto.randomBytes(32).toString('hex');
+let _analyticsSaltDay = new Date().toISOString().slice(0, 10);
+
+function getAnalyticsSalt() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== _analyticsSaltDay) {
+    _analyticsSalt = crypto.randomBytes(32).toString('hex');
+    _analyticsSaltDay = today;
+  }
+  return _analyticsSalt;
+}
+
+function hashIP(ip) {
+  return crypto.createHash('sha256').update(ip + getAnalyticsSalt()).digest('hex').slice(0, 16);
+}
+
+function getClientIP(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip || 'unknown';
+}
+
+function logAnalyticsEvent(type, data) {
+  const today = new Date().toISOString().slice(0, 10);
+  const logFile = path.join(ANALYTICS_DIR, `${today}.json`);
+  const entry = { type, timestamp: new Date().toISOString(), ...data };
+  try {
+    let entries = [];
+    if (fs.existsSync(logFile)) {
+      entries = JSON.parse(fs.readFileSync(logFile, 'utf-8'));
+    }
+    entries.push(entry);
+    fs.writeFileSync(logFile, JSON.stringify(entries));
+  } catch (err) {
+    console.error('Analytics log error:', err.message);
+  }
+}
+
+function loadAnalyticsData(days = 30) {
+  const results = [];
+  const now = new Date();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const logFile = path.join(ANALYTICS_DIR, `${dateStr}.json`);
+    try {
+      if (fs.existsSync(logFile)) {
+        const entries = JSON.parse(fs.readFileSync(logFile, 'utf-8'));
+        results.push(...entries);
+      }
+    } catch {}
+  }
+  return results;
+}
 
 // --- i18n / Subdomain SEO configuration ---
 const BASE_DOMAIN = process.env.BASE_DOMAIN || 'host-my-page.com';
@@ -315,6 +376,12 @@ app.get(`${BASE_PATH}/`, (req, res) => {
     `let currentLang = '${lang}';`
   );
 
+  // Track landing page visit for conversion rate
+  logAnalyticsEvent('landing', {
+    ipHash: hashIP(getClientIP(req)),
+    referrer: req.headers['referer'] || req.headers['referrer'] || ''
+  });
+
   res.setHeader('Vary', 'Host');
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.type('html').send(html);
@@ -580,6 +647,16 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
     const host = getMainDomainHost(req);
     const url = `${protocol}://${host}${BASE_PATH}/sites/${slug}/`;
 
+    // Log upload event (DSGVO-compliant)
+    logAnalyticsEvent('upload', {
+      ipHash: hashIP(getClientIP(req)),
+      userAgent: req.headers['user-agent'] || '',
+      fileSize: req.file.size,
+      fileType: isHtml ? 'html' : 'zip',
+      referrer: req.headers['referer'] || req.headers['referrer'] || '',
+      slug
+    });
+
     res.json({ success: true, url, slug });
   } catch (err) {
     console.error('Upload error:', err);
@@ -592,11 +669,154 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
   }
 });
 
-// Serve hosted static sites
-app.use(`${BASE_PATH}/sites`, express.static(UPLOADS_DIR, {
+// Serve hosted static sites with analytics tracking
+app.use(`${BASE_PATH}/sites`, (req, res, next) => {
+  // Only log initial page loads (not assets like .css, .js, .png etc.)
+  const ext = path.extname(req.path).toLowerCase();
+  if (!ext || ext === '.html' || ext === '.htm') {
+    const slugMatch = req.path.match(/^\/([0-9a-f]{8})/);
+    if (slugMatch) {
+      logAnalyticsEvent('pageview', {
+        ipHash: hashIP(getClientIP(req)),
+        slug: slugMatch[1],
+        referrer: req.headers['referer'] || req.headers['referrer'] || ''
+      });
+    }
+  }
+  next();
+}, express.static(UPLOADS_DIR, {
   extensions: ['html'],
   index: ['index.html']
 }));
+
+// API: Analytics data (aggregated, DSGVO-compliant)
+app.get(`${BASE_PATH}/api/analytics`, (req, res) => {
+  const days = Math.min(parseInt(req.query.days) || 30, 90);
+  const events = loadAnalyticsData(days);
+
+  const uploads = events.filter(e => e.type === 'upload');
+  const pageviews = events.filter(e => e.type === 'pageview');
+
+  // --- Uploads per day ---
+  const uploadsPerDay = {};
+  uploads.forEach(e => {
+    const day = e.timestamp.slice(0, 10);
+    uploadsPerDay[day] = (uploadsPerDay[day] || 0) + 1;
+  });
+
+  // --- Uploads per week ---
+  const uploadsPerWeek = {};
+  uploads.forEach(e => {
+    const d = new Date(e.timestamp);
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay() + 1); // Monday
+    const weekKey = weekStart.toISOString().slice(0, 10);
+    uploadsPerWeek[weekKey] = (uploadsPerWeek[weekKey] || 0) + 1;
+  });
+
+  // --- Unique uploaders (distinct IP hashes) ---
+  const uniqueUploaders = new Set(uploads.map(e => e.ipHash)).size;
+
+  // --- Returning uploaders (IP hashes with >1 upload) ---
+  const uploaderCounts = {};
+  uploads.forEach(e => {
+    uploaderCounts[e.ipHash] = (uploaderCounts[e.ipHash] || 0) + 1;
+  });
+  const returningUploaders = Object.values(uploaderCounts).filter(c => c > 1).length;
+
+  // --- Pageviews per slug ---
+  const viewsPerSlug = {};
+  pageviews.forEach(e => {
+    viewsPerSlug[e.slug] = (viewsPerSlug[e.slug] || 0) + 1;
+  });
+
+  // --- Pageviews per day ---
+  const pageviewsPerDay = {};
+  pageviews.forEach(e => {
+    const day = e.timestamp.slice(0, 10);
+    pageviewsPerDay[day] = (pageviewsPerDay[day] || 0) + 1;
+  });
+
+  // --- Unique visitors (pageviews) ---
+  const uniqueVisitors = new Set(pageviews.map(e => e.ipHash)).size;
+
+  // --- Popular hours (upload times) ---
+  const uploadsByHour = Array(24).fill(0);
+  uploads.forEach(e => {
+    const hour = new Date(e.timestamp).getHours();
+    uploadsByHour[hour]++;
+  });
+
+  // --- File types distribution ---
+  const fileTypes = { html: 0, zip: 0 };
+  uploads.forEach(e => {
+    if (e.fileType === 'html') fileTypes.html++;
+    else fileTypes.zip++;
+  });
+
+  // --- Average file size ---
+  const avgFileSize = uploads.length > 0
+    ? Math.round(uploads.reduce((sum, e) => sum + (e.fileSize || 0), 0) / uploads.length)
+    : 0;
+
+  // --- Top referrers (uploads) ---
+  const uploadReferrers = {};
+  uploads.forEach(e => {
+    if (e.referrer) {
+      try {
+        const host = new URL(e.referrer).hostname;
+        uploadReferrers[host] = (uploadReferrers[host] || 0) + 1;
+      } catch {}
+    }
+  });
+
+  // --- Top referrers (pageviews) ---
+  const viewReferrers = {};
+  pageviews.forEach(e => {
+    if (e.referrer) {
+      try {
+        const host = new URL(e.referrer).hostname;
+        viewReferrers[host] = (viewReferrers[host] || 0) + 1;
+      } catch {}
+    }
+  });
+
+  // --- Homepage visits (approximate: count events for today from landing) ---
+  const totalLandingPageViews = events.filter(e => e.type === 'landing').length;
+
+  // --- Conversion rate (uploads / unique landing page visitors) ---
+  const landingVisitors = new Set(events.filter(e => e.type === 'landing').map(e => e.ipHash)).size;
+  const conversionRate = landingVisitors > 0
+    ? (uniqueUploaders / landingVisitors * 100).toFixed(1)
+    : null;
+
+  // --- Top viewed sites ---
+  const topSites = Object.entries(viewsPerSlug)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([slug, views]) => ({ slug, views }));
+
+  res.json({
+    period: { days, from: new Date(Date.now() - days * 86400000).toISOString().slice(0, 10), to: new Date().toISOString().slice(0, 10) },
+    totals: {
+      uploads: uploads.length,
+      pageviews: pageviews.length,
+      uniqueUploaders,
+      returningUploaders,
+      uniqueVisitors,
+      avgFileSize,
+      conversionRate
+    },
+    fileTypes,
+    uploadsPerDay,
+    uploadsPerWeek,
+    pageviewsPerDay,
+    uploadsByHour,
+    topSites,
+    uploadReferrers,
+    viewReferrers
+  });
+});
 
 // Multer error handling
 app.use((err, req, res, next) => {

@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hosted Sites — Drop & Host</title>
+  <title>Admin Panel — HostMyPage</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -11,6 +12,7 @@
       --bg: #08080a;
       --surface: #131316;
       --surface-border: #1e1e22;
+      --surface-hover: #1a1a1f;
       --text: #ececef;
       --text-dim: #7c7c86;
       --text-muted: #4e4e56;
@@ -21,23 +23,18 @@
       --success-soft: rgba(61, 214, 140, 0.08);
       --error: #f25f5c;
       --error-soft: rgba(242, 95, 92, 0.08);
+      --blue: #5b8def;
+      --blue-soft: rgba(91, 141, 239, 0.08);
+      --purple: #a78bfa;
+      --purple-soft: rgba(167, 139, 250, 0.08);
+      --yellow: #f5c542;
+      --yellow-soft: rgba(245, 197, 66, 0.08);
     }
 
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    @keyframes scaleIn {
-      from { opacity: 0; transform: scale(0.95); }
-      to { opacity: 1; transform: scale(1); }
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -69,7 +66,7 @@
     .container {
       position: relative;
       width: 100%;
-      max-width: 720px;
+      max-width: 900px;
       animation: fadeUp 0.6s ease-out both;
     }
 
@@ -95,16 +92,8 @@
     .logo svg { width: 20px; height: 20px; color: white; }
 
     .header-text { flex: 1; }
-    .header-text h1 {
-      font-size: 20px;
-      font-weight: 650;
-      letter-spacing: -0.03em;
-    }
-    .header-text p {
-      font-size: 13px;
-      color: var(--text-dim);
-      margin-top: 2px;
-    }
+    .header-text h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.03em; }
+    .header-text p { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
 
     .back-link {
       font-size: 13px;
@@ -117,11 +106,41 @@
       transition: all 0.2s ease;
       white-space: nowrap;
     }
-    .back-link:hover {
-      color: var(--text);
-      border-color: #3a3a42;
-      background: rgba(255, 255, 255, 0.02);
+    .back-link:hover { color: var(--text); border-color: #3a3a42; background: rgba(255, 255, 255, 0.02); }
+
+    /* Tab navigation */
+    .tab-nav {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 4px;
+      animation: fadeUp 0.6s ease-out 0.05s both;
     }
+    .tab-btn {
+      flex: 1;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-dim);
+      background: transparent;
+      border: none;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+    .tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+    .tab-btn.active { color: var(--text); background: rgba(255,255,255,0.06); }
+    .tab-btn svg { width: 15px; height: 15px; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
 
     /* Card */
     .card {
@@ -140,12 +159,9 @@
       padding: 16px 20px;
       border-bottom: 1px solid var(--surface-border);
     }
+    .toolbar-left { display: flex; align-items: center; gap: 12px; }
 
-    .site-count {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-dim);
-    }
+    .site-count { font-size: 13px; font-weight: 500; color: var(--text-dim); }
 
     .icon-btn {
       display: flex;
@@ -160,11 +176,7 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    .icon-btn:hover {
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
-      border-color: #3a3a42;
-    }
+    .icon-btn:hover { background: rgba(255, 255, 255, 0.04); color: var(--text); border-color: #3a3a42; }
     .icon-btn svg { width: 16px; height: 16px; }
 
     /* Sites list */
@@ -181,10 +193,7 @@
     .site-row:last-child { border-bottom: none; }
     .site-row:hover { background: rgba(255, 255, 255, 0.015); }
 
-    .site-info {
-      flex: 1;
-      min-width: 0;
-    }
+    .site-info { flex: 1; min-width: 0; }
 
     .site-url {
       display: block;
@@ -199,23 +208,9 @@
     }
     .site-url:hover { text-decoration: underline; }
 
-    .site-meta {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    .site-meta-item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .site-meta-item svg {
-      width: 12px;
-      height: 12px;
-      opacity: 0.6;
-    }
+    .site-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); }
+    .site-meta-item { display: flex; align-items: center; gap: 4px; }
+    .site-meta-item svg { width: 12px; height: 12px; opacity: 0.6; }
 
     .delete-btn {
       flex-shrink: 0;
@@ -231,20 +226,11 @@
       cursor: pointer;
       transition: all 0.2s ease;
     }
-    .delete-btn:hover {
-      background: var(--error-soft);
-      border-color: rgba(242, 95, 92, 0.2);
-      color: var(--error);
-    }
+    .delete-btn:hover { background: var(--error-soft); border-color: rgba(242, 95, 92, 0.2); color: var(--error); }
     .delete-btn svg { width: 16px; height: 16px; }
 
-    /* Loading state */
-    .loading {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 48px 20px;
-    }
+    /* Loading / Empty */
+    .loading { display: flex; align-items: center; justify-content: center; padding: 48px 20px; }
     .spinner {
       width: 32px;
       height: 32px;
@@ -254,145 +240,230 @@
       animation: spin 0.8s linear infinite;
     }
 
-    /* Empty state */
-    .empty-state {
-      display: none;
-      padding: 48px 20px;
-      text-align: center;
-    }
+    .empty-state { display: none; padding: 48px 20px; text-align: center; }
     .empty-state.active { display: block; }
-
     .empty-icon {
-      width: 48px;
-      height: 48px;
-      margin: 0 auto 16px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-muted);
+      width: 48px; height: 48px; margin: 0 auto 16px; border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex; align-items: center; justify-content: center; color: var(--text-muted);
     }
     .empty-icon svg { width: 22px; height: 22px; }
-
-    .empty-title {
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 4px;
-    }
-    .empty-subtitle {
-      font-size: 12.5px;
-      color: var(--text-muted);
-      margin-bottom: 20px;
-    }
-
+    .empty-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+    .empty-subtitle { font-size: 12.5px; color: var(--text-muted); margin-bottom: 20px; }
     .upload-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--accent);
-      background: var(--accent-soft);
-      border: 1px solid rgba(232, 121, 58, 0.12);
-      border-radius: 9px;
-      text-decoration: none;
-      transition: all 0.2s ease;
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+      font-size: 13px; font-weight: 500; color: var(--accent); background: var(--accent-soft);
+      border: 1px solid rgba(232, 121, 58, 0.12); border-radius: 9px;
+      text-decoration: none; transition: all 0.2s ease;
     }
-    .upload-link:hover {
-      background: rgba(232, 121, 58, 0.12);
-      border-color: rgba(232, 121, 58, 0.2);
-    }
+    .upload-link:hover { background: rgba(232, 121, 58, 0.12); border-color: rgba(232, 121, 58, 0.2); }
 
-    /* Delete confirmation modal */
+    /* Modal */
     .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(4px);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
+      display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center;
     }
-    .modal-overlay.active {
-      display: flex;
-      animation: fadeIn 0.15s ease-out both;
-    }
-
+    .modal-overlay.active { display: flex; animation: fadeIn 0.15s ease-out both; }
     .modal {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 20px;
-      padding: 32px;
-      max-width: 360px;
-      width: 90%;
-      text-align: center;
+      background: var(--surface); border: 1px solid var(--surface-border); border-radius: 20px;
+      padding: 32px; max-width: 360px; width: 90%; text-align: center;
       animation: scaleIn 0.2s ease-out both;
     }
-
     .modal-icon {
-      width: 48px;
-      height: 48px;
-      margin: 0 auto 16px;
+      width: 48px; height: 48px; margin: 0 auto 16px; border-radius: 50%;
+      background: var(--error-soft); display: flex; align-items: center; justify-content: center; color: var(--error);
+    }
+    .modal-icon svg { width: 22px; height: 22px; }
+    .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .modal-slug { font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace; font-size: 13px; color: var(--accent); margin-bottom: 6px; }
+    .modal-warning { font-size: 12.5px; color: var(--text-dim); margin-bottom: 24px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: center; }
+
+    .btn-cancel, .btn-delete {
+      padding: 8px 20px; font-size: 13px; font-weight: 500; border-radius: 9px;
+      cursor: pointer; transition: all 0.2s ease; border: none;
+    }
+    .btn-cancel { color: var(--text-dim); background: transparent; border: 1px solid var(--surface-border); }
+    .btn-cancel:hover { color: var(--text); border-color: #3a3a42; }
+    .btn-delete { color: white; background: var(--error); }
+    .btn-delete:hover { background: #d94e4b; }
+
+    /* ===== ANALYTICS STYLES ===== */
+    .analytics-section { animation: fadeUp 0.6s ease-out 0.1s both; }
+
+    /* Period selector */
+    .period-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .period-label { font-size: 13px; color: var(--text-dim); font-weight: 500; }
+    .period-select {
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 9px;
+      cursor: pointer;
+      appearance: none;
+      padding-right: 28px;
+      background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%237c7c86' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+    .period-select:hover { border-color: #3a3a42; }
+
+    /* KPI grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+    .kpi-card:hover { border-color: #2a2a30; }
+    .kpi-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+    }
+    .kpi-label .kpi-dot {
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: var(--error-soft);
+      flex-shrink: 0;
+    }
+    .kpi-value {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Chart cards */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .chart-card.full-width { grid-column: 1 / -1; }
+    .chart-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chart-title svg { width: 15px; height: 15px; color: var(--text-dim); }
+    .chart-container { position: relative; height: 220px; }
+    .chart-container.small { height: 180px; }
+
+    /* Top sites table */
+    .top-table { width: 100%; border-collapse: collapse; }
+    .top-table th {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: left;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--surface-border);
+    }
+    .top-table td {
+      font-size: 13px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .top-table tr:last-child td { border-bottom: none; }
+    .top-table .slug-cell {
+      font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+      color: var(--accent);
+      font-size: 12px;
+    }
+    .top-table .views-cell { text-align: right; font-weight: 600; }
+    .top-table .bar-cell { width: 40%; padding-left: 16px; }
+    .mini-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--accent-soft);
+      overflow: hidden;
+    }
+    .mini-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), #c4612e);
+    }
+
+    /* Referrer list */
+    .ref-list { list-style: none; }
+    .ref-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-size: 13px;
+    }
+    .ref-item:last-child { border-bottom: none; }
+    .ref-host { color: var(--text-dim); }
+    .ref-count { font-weight: 600; font-size: 12px; color: var(--text-muted); }
+
+    /* Analytics loading */
+    .analytics-loading {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--error);
+      padding: 80px 20px;
     }
-    .modal-icon svg { width: 22px; height: 22px; }
 
-    .modal-title {
-      font-size: 15px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    .modal-slug {
-      font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
-      font-size: 13px;
-      color: var(--accent);
-      margin-bottom: 6px;
-    }
-    .modal-warning {
-      font-size: 12.5px;
-      color: var(--text-dim);
-      margin-bottom: 24px;
-    }
-    .modal-actions {
+    /* No data state */
+    .no-data {
       display: flex;
-      gap: 10px;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
-    }
-
-    .btn-cancel, .btn-delete {
-      padding: 8px 20px;
+      padding: 40px 20px;
+      color: var(--text-muted);
       font-size: 13px;
-      font-weight: 500;
-      border-radius: 9px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border: none;
+      text-align: center;
+      gap: 8px;
     }
-    .btn-cancel {
-      color: var(--text-dim);
-      background: transparent;
-      border: 1px solid var(--surface-border);
-    }
-    .btn-cancel:hover {
-      color: var(--text);
-      border-color: #3a3a42;
-    }
-    .btn-delete {
-      color: white;
-      background: var(--error);
-    }
-    .btn-delete:hover { background: #d94e4b; }
+    .no-data svg { width: 32px; height: 32px; opacity: 0.3; }
 
     /* Responsive */
+    @media (max-width: 768px) {
+      .chart-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
     @media (max-width: 640px) {
       body { padding: 40px 16px 32px; }
       .header { flex-wrap: wrap; gap: 12px; }
@@ -402,6 +473,8 @@
       .site-meta { flex: 1; }
       .toolbar { padding: 14px 16px; }
       .card { border-radius: 16px; }
+      .kpi-grid { grid-template-columns: 1fr; }
+      .kpi-value { font-size: 24px; }
     }
   </style>
 </head>
@@ -417,44 +490,78 @@
         </svg>
       </div>
       <div class="header-text">
-        <h1>Hosted Sites</h1>
-        <p>Manage your uploaded pages</p>
+        <h1>Admin Panel</h1>
+        <p>Sites & Analytics</p>
       </div>
-      <a class="back-link" href="./">← Upload</a>
+      <a class="back-link" href="./">&#8592; Upload</a>
     </div>
 
-    <div class="card">
-      <div class="toolbar">
-        <span class="site-count" id="siteCount">Loading...</span>
-        <button class="icon-btn" id="refreshBtn" title="Refresh">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-            <path d="M3 3v5h5"/>
-            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-            <path d="M21 21v-5h-5"/>
-          </svg>
-        </button>
-      </div>
+    <!-- Tab Navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" data-tab="sites">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+        Hosted Sites
+      </button>
+      <button class="tab-btn" data-tab="analytics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        Analytics
+      </button>
+    </div>
 
-      <div class="sites-list" id="sitesList">
-        <div class="loading" id="loadingState">
-          <div class="spinner"></div>
+    <!-- ===== SITES TAB ===== -->
+    <div class="tab-content active" id="tab-sites">
+      <div class="card">
+        <div class="toolbar">
+          <span class="site-count" id="siteCount">Loading...</span>
+          <button class="icon-btn" id="refreshBtn" title="Refresh">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+              <path d="M21 21v-5h-5"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="sites-list" id="sitesList">
+          <div class="loading" id="loadingState"><div class="spinner"></div></div>
+        </div>
+
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+              <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+            </svg>
+          </div>
+          <p class="empty-title">No sites hosted yet</p>
+          <p class="empty-subtitle">Upload your first site to get started</p>
+          <a class="upload-link" href="./">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 10v3h12v-3"/><path d="M8 3v8"/><path d="m5 6 3-3 3 3"/></svg>
+            Upload a site
+          </a>
         </div>
       </div>
+    </div>
 
-      <div class="empty-state" id="emptyState">
-        <div class="empty-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
-            <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
-          </svg>
+    <!-- ===== ANALYTICS TAB ===== -->
+    <div class="tab-content" id="tab-analytics">
+      <div class="analytics-section">
+        <!-- Period selector -->
+        <div class="period-bar">
+          <span class="period-label" id="periodLabel">Last 30 days</span>
+          <select class="period-select" id="periodSelect">
+            <option value="7">Last 7 days</option>
+            <option value="14">Last 14 days</option>
+            <option value="30" selected>Last 30 days</option>
+            <option value="60">Last 60 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
         </div>
-        <p class="empty-title">No sites hosted yet</p>
-        <p class="empty-subtitle">Upload your first site to get started</p>
-        <a class="upload-link" href="./">
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 10v3h12v-3"/><path d="M8 3v8"/><path d="m5 6 3-3 3 3"/></svg>
-          Upload a site
-        </a>
+
+        <div id="analyticsContent">
+          <div class="analytics-loading"><div class="spinner"></div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -481,10 +588,31 @@
   </div>
 
   <script>
-    // Derive API base from current URL
+    // ===== SHARED =====
     const basePath = window.location.pathname.replace(/\/d7x9k2-panel\/?$/, '');
     const apiBase = basePath + '/api/sites';
+    const analyticsApi = basePath + '/api/analytics';
 
+    // ===== TAB NAVIGATION =====
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    let analyticsLoaded = false;
+
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        tabBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`tab-${tab}`).classList.add('active');
+        if (tab === 'analytics' && !analyticsLoaded) {
+          loadAnalytics();
+          analyticsLoaded = true;
+        }
+      });
+    });
+
+    // ===== SITES MANAGEMENT =====
     const sitesList = document.getElementById('sitesList');
     const siteCount = document.getElementById('siteCount');
     const loadingState = document.getElementById('loadingState');
@@ -498,7 +626,6 @@
     let sites = [];
     let pendingDeleteSlug = null;
 
-    // Format bytes to human-readable
     function formatBytes(bytes) {
       if (bytes === 0) return '0 B';
       const units = ['B', 'KB', 'MB', 'GB'];
@@ -506,7 +633,6 @@
       return parseFloat((bytes / Math.pow(1024, i)).toFixed(1)) + ' ' + units[i];
     }
 
-    // Format ISO date to readable
     function formatDate(iso) {
       return new Intl.DateTimeFormat('en', {
         month: 'short', day: 'numeric', year: 'numeric',
@@ -514,14 +640,11 @@
       }).format(new Date(iso));
     }
 
-    // Fetch and render all sites
     async function loadSites() {
       loadingState.style.display = '';
       emptyState.classList.remove('active');
-      // Clear existing rows
       sitesList.querySelectorAll('.site-row').forEach(r => r.remove());
       siteCount.textContent = 'Loading...';
-
       try {
         const res = await fetch(apiBase);
         const data = await res.json();
@@ -536,16 +659,13 @@
     function renderSites() {
       loadingState.style.display = 'none';
       sitesList.querySelectorAll('.site-row').forEach(r => r.remove());
-
       if (sites.length === 0) {
         siteCount.textContent = 'No sites';
         emptyState.classList.add('active');
         return;
       }
-
       emptyState.classList.remove('active');
       siteCount.textContent = `${sites.length} site${sites.length !== 1 ? 's' : ''}`;
-
       for (const site of sites) {
         const row = document.createElement('div');
         row.className = 'site-row';
@@ -570,57 +690,338 @@
             </svg>
           </button>
         `;
-        row.querySelector('.delete-btn').addEventListener('click', () => {
-          confirmDelete(site.slug);
-        });
+        row.querySelector('.delete-btn').addEventListener('click', () => confirmDelete(site.slug));
         sitesList.appendChild(row);
       }
     }
 
-    // Delete flow
-    function confirmDelete(slug) {
-      pendingDeleteSlug = slug;
-      modalSlug.textContent = slug;
-      deleteModal.classList.add('active');
-    }
-
-    function closeModal() {
-      deleteModal.classList.remove('active');
-      pendingDeleteSlug = null;
-    }
-
+    function confirmDelete(slug) { pendingDeleteSlug = slug; modalSlug.textContent = slug; deleteModal.classList.add('active'); }
+    function closeModal() { deleteModal.classList.remove('active'); pendingDeleteSlug = null; }
     async function executeDelete() {
       if (!pendingDeleteSlug) return;
       const slug = pendingDeleteSlug;
       closeModal();
-
       try {
         const res = await fetch(`${apiBase}/${slug}`, { method: 'DELETE' });
         const data = await res.json();
-        if (data.success) {
-          sites = sites.filter(s => s.slug !== slug);
-          renderSites();
-        }
-      } catch {
-        // Silently fail — user can refresh
-      }
+        if (data.success) { sites = sites.filter(s => s.slug !== slug); renderSites(); }
+      } catch {}
     }
 
-    // Event listeners
     refreshBtn.addEventListener('click', loadSites);
     modalCancel.addEventListener('click', closeModal);
     modalDelete.addEventListener('click', executeDelete);
-
-    deleteModal.addEventListener('click', (e) => {
-      if (e.target === deleteModal) closeModal();
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeModal();
-    });
-
-    // Load on page ready
+    deleteModal.addEventListener('click', (e) => { if (e.target === deleteModal) closeModal(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
     loadSites();
+
+    // ===== ANALYTICS =====
+    const periodSelect = document.getElementById('periodSelect');
+    const periodLabel = document.getElementById('periodLabel');
+    const analyticsContent = document.getElementById('analyticsContent');
+    let chartInstances = [];
+
+    periodSelect.addEventListener('change', () => {
+      periodLabel.textContent = periodSelect.options[periodSelect.selectedIndex].text;
+      loadAnalytics();
+    });
+
+    function destroyCharts() {
+      chartInstances.forEach(c => c.destroy());
+      chartInstances = [];
+    }
+
+    // Chart.js global defaults for dark theme
+    function configureChartDefaults() {
+      Chart.defaults.color = '#7c7c86';
+      Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+      Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+      Chart.defaults.font.size = 11;
+      Chart.defaults.plugins.legend.display = false;
+      Chart.defaults.plugins.tooltip.backgroundColor = '#1e1e22';
+      Chart.defaults.plugins.tooltip.titleColor = '#ececef';
+      Chart.defaults.plugins.tooltip.bodyColor = '#ececef';
+      Chart.defaults.plugins.tooltip.borderColor = '#2a2a30';
+      Chart.defaults.plugins.tooltip.borderWidth = 1;
+      Chart.defaults.plugins.tooltip.cornerRadius = 8;
+      Chart.defaults.plugins.tooltip.padding = 10;
+      Chart.defaults.plugins.tooltip.displayColors = false;
+    }
+
+    async function loadAnalytics() {
+      const days = periodSelect.value;
+      analyticsContent.innerHTML = '<div class="analytics-loading"><div class="spinner"></div></div>';
+      destroyCharts();
+
+      try {
+        const res = await fetch(`${analyticsApi}?days=${days}`);
+        const data = await res.json();
+        renderAnalytics(data);
+      } catch {
+        analyticsContent.innerHTML = '<div class="no-data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Failed to load analytics</div>';
+      }
+    }
+
+    function generateDateRange(days) {
+      const dates = [];
+      const now = new Date();
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().slice(0, 10));
+      }
+      return dates;
+    }
+
+    function renderAnalytics(data) {
+      configureChartDefaults();
+      const t = data.totals;
+      const days = parseInt(periodSelect.value);
+      const dateRange = generateDateRange(days);
+
+      // Fill missing days with 0
+      const uploadsData = dateRange.map(d => data.uploadsPerDay[d] || 0);
+      const pageviewsData = dateRange.map(d => data.pageviewsPerDay[d] || 0);
+      const dateLabels = dateRange.map(d => {
+        const dt = new Date(d + 'T00:00:00');
+        return dt.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+      });
+
+      analyticsContent.innerHTML = `
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label"><span class="kpi-dot" style="background:var(--accent)"></span>Uploads</div>
+            <div class="kpi-value" style="color:var(--accent)">${t.uploads}</div>
+            <div class="kpi-sub">${(t.uploads / days * 7).toFixed(1)} / week avg</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><span class="kpi-dot" style="background:var(--blue)"></span>Page Views</div>
+            <div class="kpi-value" style="color:var(--blue)">${t.pageviews}</div>
+            <div class="kpi-sub">${t.uniqueVisitors} unique visitors</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><span class="kpi-dot" style="background:var(--success)"></span>Uploaders</div>
+            <div class="kpi-value" style="color:var(--success)">${t.uniqueUploaders}</div>
+            <div class="kpi-sub">${t.returningUploaders} returning (${t.uniqueUploaders > 0 ? (t.returningUploaders / t.uniqueUploaders * 100).toFixed(0) : 0}%)</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><span class="kpi-dot" style="background:var(--purple)"></span>Conversion</div>
+            <div class="kpi-value" style="color:var(--purple)">${t.conversionRate !== null ? t.conversionRate + '%' : '—'}</div>
+            <div class="kpi-sub">Visit &#8594; Upload</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label"><span class="kpi-dot" style="background:var(--yellow)"></span>Avg File Size</div>
+            <div class="kpi-value" style="color:var(--yellow)">${formatBytes(t.avgFileSize)}</div>
+            <div class="kpi-sub">${data.fileTypes.html} HTML / ${data.fileTypes.zip} ZIP</div>
+          </div>
+        </div>
+
+        <!-- Charts row 1: Uploads + Pageviews over time -->
+        <div class="chart-grid">
+          <div class="chart-card full-width">
+            <div class="chart-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+              Traffic Overview
+            </div>
+            <div class="chart-container"><canvas id="chartTraffic"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Charts row 2: File types + Upload hours -->
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+              File Types
+            </div>
+            <div class="chart-container small"><canvas id="chartFileTypes"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Upload Hours (UTC)
+            </div>
+            <div class="chart-container small"><canvas id="chartHours"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Charts row 3: Top sites + Referrers -->
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+              Top Hosted Sites
+            </div>
+            <div id="topSitesContainer"></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              Traffic Sources
+            </div>
+            <div id="referrersContainer"></div>
+          </div>
+        </div>
+      `;
+
+      // --- Traffic Overview Chart (combined uploads + pageviews) ---
+      const ctxTraffic = document.getElementById('chartTraffic').getContext('2d');
+      chartInstances.push(new Chart(ctxTraffic, {
+        type: 'line',
+        data: {
+          labels: dateLabels,
+          datasets: [
+            {
+              label: 'Page Views',
+              data: pageviewsData,
+              borderColor: '#5b8def',
+              backgroundColor: 'rgba(91, 141, 239, 0.08)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.35,
+              pointRadius: 0,
+              pointHoverRadius: 5,
+              pointHoverBackgroundColor: '#5b8def'
+            },
+            {
+              label: 'Uploads',
+              data: uploadsData,
+              borderColor: '#e8793a',
+              backgroundColor: 'rgba(232, 121, 58, 0.08)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.35,
+              pointRadius: 0,
+              pointHoverRadius: 5,
+              pointHoverBackgroundColor: '#e8793a'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: true, position: 'top', align: 'end', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 6, padding: 16, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                title: (items) => items[0].label
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { maxRotation: 0, maxTicksLimit: days <= 14 ? days : 10 }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0 },
+              grid: { color: 'rgba(255,255,255,0.03)' }
+            }
+          }
+        }
+      }));
+
+      // --- File Types Doughnut ---
+      const ctxTypes = document.getElementById('chartFileTypes').getContext('2d');
+      const hasFileData = data.fileTypes.html > 0 || data.fileTypes.zip > 0;
+      chartInstances.push(new Chart(ctxTypes, {
+        type: 'doughnut',
+        data: {
+          labels: ['HTML', 'ZIP'],
+          datasets: [{
+            data: hasFileData ? [data.fileTypes.html, data.fileTypes.zip] : [1],
+            backgroundColor: hasFileData ? ['#e8793a', '#5b8def'] : ['rgba(255,255,255,0.05)'],
+            borderColor: 'transparent',
+            borderWidth: 0,
+            hoverOffset: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          plugins: {
+            legend: { display: true, position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 6, padding: 16, font: { size: 11 } } },
+            tooltip: { enabled: hasFileData }
+          }
+        }
+      }));
+
+      // --- Upload Hours Bar Chart ---
+      const ctxHours = document.getElementById('chartHours').getContext('2d');
+      const hourLabels = Array.from({ length: 24 }, (_, i) => `${i}:00`);
+      chartInstances.push(new Chart(ctxHours, {
+        type: 'bar',
+        data: {
+          labels: hourLabels,
+          datasets: [{
+            data: data.uploadsByHour,
+            backgroundColor: data.uploadsByHour.map((v, i) => {
+              const max = Math.max(...data.uploadsByHour, 1);
+              const intensity = v / max;
+              return `rgba(232, 121, 58, ${0.15 + intensity * 0.65})`;
+            }),
+            borderRadius: 3,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: { size: 10 } } },
+            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(255,255,255,0.03)' } }
+          }
+        }
+      }));
+
+      // --- Top Sites Table ---
+      const topContainer = document.getElementById('topSitesContainer');
+      if (data.topSites.length === 0) {
+        topContainer.innerHTML = '<div class="no-data" style="padding:24px 0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>No page views yet</div>';
+      } else {
+        const maxViews = data.topSites[0].views;
+        topContainer.innerHTML = `
+          <table class="top-table">
+            <thead><tr><th>Site</th><th class="bar-cell"></th><th style="text-align:right">Views</th></tr></thead>
+            <tbody>
+              ${data.topSites.map(s => `
+                <tr>
+                  <td class="slug-cell">${s.slug}</td>
+                  <td class="bar-cell"><div class="mini-bar"><div class="mini-bar-fill" style="width:${(s.views / maxViews * 100).toFixed(0)}%"></div></div></td>
+                  <td class="views-cell">${s.views}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      // --- Referrers ---
+      const refContainer = document.getElementById('referrersContainer');
+      const allRefs = {};
+      Object.entries(data.uploadReferrers || {}).forEach(([k, v]) => { allRefs[k] = (allRefs[k] || 0) + v; });
+      Object.entries(data.viewReferrers || {}).forEach(([k, v]) => { allRefs[k] = (allRefs[k] || 0) + v; });
+      const sortedRefs = Object.entries(allRefs).sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+      if (sortedRefs.length === 0) {
+        refContainer.innerHTML = '<div class="no-data" style="padding:24px 0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>No referrer data yet</div>';
+      } else {
+        refContainer.innerHTML = `
+          <ul class="ref-list">
+            ${sortedRefs.map(([host, count]) => `
+              <li class="ref-item">
+                <span class="ref-host">${host}</span>
+                <span class="ref-count">${count}</span>
+              </li>
+            `).join('')}
+          </ul>
+        `;
+      }
+    }
   </script>
 </body>
 </html>
