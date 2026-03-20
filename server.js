@@ -13,11 +13,16 @@ const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, ''); // e.g. "/s
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const ANALYTICS_DIR = path.join(__dirname, 'data', 'analytics');
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+const MAX_EXTRACTED_SIZE = 200 * 1024 * 1024; // 200 MB max extracted ZIP size
+const MAX_ZIP_FILES = 500; // Max files in a ZIP archive
+const SITE_MAX_AGE_DAYS = parseInt(process.env.SITE_MAX_AGE_DAYS) || 30; // Auto-expiry
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || ''; // Required for admin panel access
+const REPORTS_DIR = path.join(__dirname, 'data', 'reports');
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
 
 // --- Analytics logging (DSGVO-compliant, no cookies, hashed IPs) ---
-if (!fs.existsSync(ANALYTICS_DIR)) {
-  fs.mkdirSync(ANALYTICS_DIR, { recursive: true });
+for (const dir of [ANALYTICS_DIR, REPORTS_DIR, path.join(__dirname, 'data')]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 // Daily rotating salt for IP hashing (not stored, regenerated daily)
@@ -174,6 +179,14 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // CSP for the main landing page (not user-hosted sites)
+  if (!req.path.startsWith(`${BASE_PATH}/sites/`)) {
+    res.setHeader('Content-Security-Policy',
+      "default-src 'self'; script-src 'self' https://www.google.com https://www.gstatic.com; " +
+      "style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+      "frame-src https://www.google.com; connect-src 'self'; font-src 'self';"
+    );
+  }
   next();
 });
 
@@ -248,8 +261,20 @@ if (BASE_PATH) {
   });
 }
 
-// Serve admin page under a cryptic path (security through obscurity)
-app.get(`${BASE_PATH}/d7x9k2-panel`, (req, res) => {
+// Admin authentication middleware
+function requireAdmin(req, res, next) {
+  if (!ADMIN_TOKEN) {
+    return res.status(503).send('Admin panel disabled. Set ADMIN_TOKEN env variable.');
+  }
+  const token = req.query.token || req.headers['x-admin-token'];
+  if (!token || token !== ADMIN_TOKEN) {
+    return res.status(401).send('Unauthorized. Provide ?token=YOUR_ADMIN_TOKEN');
+  }
+  next();
+}
+
+// Serve admin page (requires ADMIN_TOKEN)
+app.get(`${BASE_PATH}/d7x9k2-panel`, requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
@@ -463,19 +488,187 @@ const upload = multer({
   }
 });
 
+// --- Magic byte validation ---
+const MAGIC_BYTES = {
+  zip: [0x50, 0x4B, 0x03, 0x04],
+};
+
+function validateMagicBytes(filePath, expectedType) {
+  if (expectedType !== 'zip') return true; // HTML is text, no magic bytes
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(4);
+    fs.readSync(fd, buf, 0, 4, 0);
+    fs.closeSync(fd);
+    const expected = MAGIC_BYTES.zip;
+    return expected.every((byte, i) => buf[i] === byte);
+  } catch {
+    return false;
+  }
+}
+
+// --- Safe ZIP extraction (Zip Slip + symlink + bomb protection) ---
+function safeExtractZip(zipPath, destDir) {
+  const zip = new AdmZip(zipPath);
+  const zipEntries = zip.getEntries();
+  const resolvedDest = fs.realpathSync(destDir);
+
+  // ZIP bomb check: total file count
+  if (zipEntries.length > MAX_ZIP_FILES) {
+    return { error: `ZIP contains too many files (${zipEntries.length}, max ${MAX_ZIP_FILES}).` };
+  }
+
+  // ZIP bomb check: total uncompressed size
+  let totalSize = 0;
+  for (const entry of zipEntries) {
+    totalSize += entry.header.size;
+    if (totalSize > MAX_EXTRACTED_SIZE) {
+      return { error: `ZIP extracted size exceeds ${MAX_EXTRACTED_SIZE / 1024 / 1024} MB limit.` };
+    }
+  }
+
+  for (const entry of zipEntries) {
+    const entryPath = path.join(destDir, entry.entryName);
+    const resolvedEntry = path.resolve(entryPath);
+
+    // Zip Slip: ensure resolved path is within destination
+    if (!resolvedEntry.startsWith(resolvedDest + path.sep) && resolvedEntry !== resolvedDest) {
+      return { error: 'ZIP contains path traversal entries.' };
+    }
+
+    // Symlink protection
+    if (entry.header.attr && (entry.header.attr & 0xA0000000) !== 0) {
+      return { error: 'ZIP contains symbolic links.' };
+    }
+
+    if (entry.isDirectory) {
+      fs.mkdirSync(resolvedEntry, { recursive: true });
+    } else {
+      fs.mkdirSync(path.dirname(resolvedEntry), { recursive: true });
+      fs.writeFileSync(resolvedEntry, entry.getData());
+    }
+  }
+
+  return { error: null };
+}
+
+// --- Auto-expiry: clean up sites older than SITE_MAX_AGE_DAYS ---
+function cleanExpiredSites() {
+  if (!fs.existsSync(UPLOADS_DIR)) return;
+  const now = Date.now();
+  const maxAge = SITE_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+  try {
+    const entries = fs.readdirSync(UPLOADS_DIR, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dirPath = path.join(UPLOADS_DIR, entry.name);
+      try {
+        const stats = fs.statSync(dirPath);
+        if (now - stats.birthtimeMs > maxAge) {
+          fs.rmSync(dirPath, { recursive: true, force: true });
+          console.log(`Auto-expired site: ${entry.name}`);
+        }
+      } catch {}
+    }
+  } catch (err) {
+    console.error('Auto-expiry error:', err.message);
+  }
+}
+
+// Run cleanup on startup and every 6 hours
+cleanExpiredSites();
+setInterval(cleanExpiredSites, 6 * 60 * 60 * 1000);
+
+// --- Dangerous file extension blocklist ---
+const BLOCKED_EXTENSIONS = new Set([
+  '.php', '.php3', '.php4', '.php5', '.phtml',
+  '.asp', '.aspx', '.jsp', '.jspx',
+  '.cgi', '.pl', '.py', '.rb', '.sh', '.bash',
+  '.exe', '.bat', '.cmd', '.com', '.msi', '.dll', '.scr', '.pif',
+  '.jar', '.war', '.class',
+  '.htaccess', '.htpasswd',
+]);
+
+function checkBlockedExtensions(dirPath) {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      const result = checkBlockedExtensions(fullPath);
+      if (result) return result;
+    } else {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (BLOCKED_EXTENSIONS.has(ext)) {
+        return `Blocked file type: ${ext} (${entry.name})`;
+      }
+    }
+  }
+  return null;
+}
+
 // --- Upload content scanner (detect phishing, credential harvesting, etc.) ---
 const SUSPICIOUS_PATTERNS = [
+  // Obfuscated code
   { pattern: /document\.write\s*\(\s*unescape\s*\(/i, reason: 'Obfuscated code (document.write + unescape)' },
   { pattern: /document\.write\s*\(\s*atob\s*\(/i, reason: 'Obfuscated code (document.write + atob)' },
   { pattern: /eval\s*\(\s*atob\s*\(/i, reason: 'Obfuscated code (eval + atob)' },
   { pattern: /eval\s*\(\s*unescape\s*\(/i, reason: 'Obfuscated code (eval + unescape)' },
   { pattern: /eval\s*\(\s*String\.fromCharCode/i, reason: 'Obfuscated code (eval + fromCharCode)' },
+  // Hidden iframes
   { pattern: /<iframe[^>]+style\s*=\s*"[^"]*position\s*:\s*fixed[^"]*width\s*:\s*100%/i, reason: 'Hidden fullscreen iframe overlay' },
   { pattern: /<iframe[^>]+style\s*=\s*"[^"]*visibility\s*:\s*hidden/i, reason: 'Hidden iframe' },
+  // Credential harvesting
   { pattern: /<form[^>]+action\s*=\s*"https?:\/\/[^"]+\.(php|asp|aspx|jsp)/i, reason: 'Form posting credentials to external server' },
   { pattern: /type\s*=\s*"password".*action\s*=\s*"https?:\/\//is, reason: 'Password field with external form action' },
   { pattern: /\.php\??(email|user|pass|login|credential)/i, reason: 'Suspected credential exfiltration endpoint' },
+  // External script loading (phishing kits, skimmers)
+  { pattern: /<script[^>]+src\s*=\s*"https?:\/\/[^"]*\.(tk|ml|ga|cf|gq|buzz|top|work|click|surf)\//i, reason: 'Script loaded from suspicious TLD' },
+  // Crypto miners
+  { pattern: /coinhive\.min\.js|CoinHive\.Anonymous|coin-hive/i, reason: 'Crypto miner (CoinHive)' },
+  { pattern: /webminerpool|minero\.cc|cryptoloot|crypto-loot/i, reason: 'Crypto miner detected' },
+  { pattern: /miner\.start\s*\(|startMining\s*\(/i, reason: 'Crypto mining API call' },
+  // Redirects to external sites
+  { pattern: /<meta[^>]+http-equiv\s*=\s*"refresh"[^>]+url\s*=\s*https?:\/\//i, reason: 'Meta refresh redirect to external URL' },
+  { pattern: /window\.location\s*[=.]\s*["']https?:\/\//i, reason: 'JavaScript redirect to external URL' },
+  { pattern: /location\s*\.\s*replace\s*\(\s*["']https?:\/\//i, reason: 'JavaScript redirect to external URL' },
+  { pattern: /location\s*\.\s*href\s*=\s*["']https?:\/\//i, reason: 'JavaScript redirect to external URL' },
+  // Base64 payload hiding (large blobs > 5KB suggest obfuscation)
+  { pattern: /atob\s*\(\s*["'][A-Za-z0-9+/=]{5000,}["']\s*\)/i, reason: 'Large Base64-encoded payload (possible obfuscation)' },
+  { pattern: /data:text\/html;base64,[A-Za-z0-9+/=]{1000,}/i, reason: 'Base64-encoded HTML data URI' },
 ];
+
+// Content hash tracking for previously flagged uploads
+const FLAGGED_HASHES_FILE = path.join(__dirname, 'data', 'flagged-hashes.json');
+
+function loadFlaggedHashes() {
+  try {
+    if (fs.existsSync(FLAGGED_HASHES_FILE)) {
+      return new Set(JSON.parse(fs.readFileSync(FLAGGED_HASHES_FILE, 'utf-8')));
+    }
+  } catch {}
+  return new Set();
+}
+
+function saveFlaggedHash(hash) {
+  const hashes = loadFlaggedHashes();
+  hashes.add(hash);
+  fs.writeFileSync(FLAGGED_HASHES_FILE, JSON.stringify([...hashes]));
+}
+
+function hashDirectoryContent(dirPath) {
+  const hash = crypto.createHash('sha256');
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      hash.update(hashDirectoryContent(fullPath));
+    } else {
+      hash.update(entry.name);
+      hash.update(fs.readFileSync(fullPath));
+    }
+  }
+  return hash.digest('hex');
+}
 
 function scanFileContent(content) {
   for (const { pattern, reason } of SUSPICIOUS_PATTERNS) {
@@ -487,15 +680,54 @@ function scanFileContent(content) {
 }
 
 function scanDirectory(dirPath) {
+  // Check blocked file extensions first
+  const blockedResult = checkBlockedExtensions(dirPath);
+  if (blockedResult) return blockedResult;
+
+  // Check content hash against previously flagged uploads
+  const contentHash = hashDirectoryContent(dirPath);
+  const flaggedHashes = loadFlaggedHashes();
+  if (flaggedHashes.has(contentHash)) {
+    return 'Content matches a previously flagged upload';
+  }
+
+  // Scan file contents
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      const result = scanDirectory(fullPath);
+      // Skip blocked extensions check (already done above) — only scan content
+      const result = scanDirectoryContent(fullPath);
       if (result) return result;
     } else {
       const ext = path.extname(entry.name).toLowerCase();
-      if (['.html', '.htm', '.js', '.php', '.asp', '.jsp'].includes(ext)) {
+      if (['.html', '.htm', '.js'].includes(ext)) {
+        try {
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          const result = scanFileContent(content);
+          if (result) {
+            // Save hash so re-uploads of same content are instantly blocked
+            saveFlaggedHash(contentHash);
+            return `${result} (in ${entry.name})`;
+          }
+        } catch {}
+      }
+    }
+  }
+  return null;
+}
+
+// Content-only scan for subdirectories (extension check already done at top level)
+function scanDirectoryContent(dirPath) {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      const result = scanDirectoryContent(fullPath);
+      if (result) return result;
+    } else {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (['.html', '.htm', '.js'].includes(ext)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf-8');
           const result = scanFileContent(content);
@@ -528,8 +760,8 @@ app.get(`${BASE_PATH}/api/health`, (req, res) => {
   });
 });
 
-// API: List all hosted sites
-app.get(`${BASE_PATH}/api/sites`, (req, res) => {
+// API: List all hosted sites (admin only)
+app.get(`${BASE_PATH}/api/sites`, requireAdmin, (req, res) => {
   try {
     if (!fs.existsSync(UPLOADS_DIR)) {
       return res.json({ sites: [] });
@@ -561,8 +793,8 @@ app.get(`${BASE_PATH}/api/sites`, (req, res) => {
   }
 });
 
-// API: Delete a hosted site
-app.delete(`${BASE_PATH}/api/sites/:slug`, (req, res) => {
+// API: Delete a hosted site (admin only)
+app.delete(`${BASE_PATH}/api/sites/:slug`, requireAdmin, (req, res) => {
   const slug = req.params.slug;
 
   if (!/^[0-9a-f]{8}$/.test(slug)) {
@@ -656,9 +888,26 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
       fs.copyFileSync(req.file.path, path.join(siteDir, 'index.html'));
       fs.unlinkSync(req.file.path);
     } else {
-      // ZIP file — extract
-      const zip = new AdmZip(req.file.path);
-      zip.extractAllTo(siteDir, true);
+      // Validate magic bytes (ensure it's actually a ZIP)
+      if (!validateMagicBytes(req.file.path, 'zip')) {
+        fs.rmSync(siteDir, { recursive: true, force: true });
+        try { fs.unlinkSync(req.file.path); } catch {}
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid ZIP file.'
+        });
+      }
+
+      // Safe ZIP extraction (Zip Slip, symlink, and bomb protection)
+      const extractResult = safeExtractZip(req.file.path, siteDir);
+      if (extractResult.error) {
+        fs.rmSync(siteDir, { recursive: true, force: true });
+        try { fs.unlinkSync(req.file.path); } catch {}
+        return res.status(400).json({
+          success: false,
+          error: extractResult.error
+        });
+      }
 
       // Flatten single-root-folder ZIPs
       const entries = fs.readdirSync(siteDir);
@@ -724,8 +973,16 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
   }
 });
 
-// Serve hosted static sites with analytics tracking
+// Serve hosted static sites with analytics tracking and sandbox headers
 app.use(`${BASE_PATH}/sites`, (req, res, next) => {
+  // Sandbox user-hosted content: restrict capabilities to prevent cross-origin attacks
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none';");
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+
   // Only log initial page loads (not assets like .css, .js, .png etc.)
   const ext = path.extname(req.path).toLowerCase();
   if (!ext || ext === '.html' || ext === '.htm') {
@@ -744,8 +1001,47 @@ app.use(`${BASE_PATH}/sites`, (req, res, next) => {
   index: ['index.html']
 }));
 
-// API: Analytics data (aggregated, DSGVO-compliant)
-app.get(`${BASE_PATH}/api/analytics`, (req, res) => {
+// API: Report abuse for a hosted site (public, rate-limited)
+const reportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+  keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip,
+});
+
+app.use(`${BASE_PATH}/api/report`, express.json());
+app.post(`${BASE_PATH}/api/report`, reportLimiter, (req, res) => {
+  const { slug, reason } = req.body || {};
+  if (!slug || !/^[0-9a-f]{8}$/.test(slug)) {
+    return res.status(400).json({ error: 'Invalid slug.' });
+  }
+  if (!reason || typeof reason !== 'string' || reason.length > 500) {
+    return res.status(400).json({ error: 'Reason is required (max 500 chars).' });
+  }
+  const report = {
+    slug,
+    reason: reason.slice(0, 500),
+    timestamp: new Date().toISOString(),
+    ipHash: hashIP(getClientIP(req)),
+  };
+  const reportFile = path.join(REPORTS_DIR, `${new Date().toISOString().slice(0, 10)}.json`);
+  try {
+    let reports = [];
+    if (fs.existsSync(reportFile)) {
+      reports = JSON.parse(fs.readFileSync(reportFile, 'utf-8'));
+    }
+    reports.push(report);
+    fs.writeFileSync(reportFile, JSON.stringify(reports));
+  } catch (err) {
+    console.error('Report save error:', err.message);
+  }
+  res.json({ success: true, message: 'Report received. We will review it shortly.' });
+});
+
+// API: Analytics data (admin only, aggregated, DSGVO-compliant)
+app.get(`${BASE_PATH}/api/analytics`, requireAdmin, (req, res) => {
   const days = Math.min(parseInt(req.query.days) || 30, 90);
   const events = loadAnalyticsData(days);
 
