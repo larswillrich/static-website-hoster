@@ -463,6 +463,50 @@ const upload = multer({
   }
 });
 
+// --- Upload content scanner (detect phishing, credential harvesting, etc.) ---
+const SUSPICIOUS_PATTERNS = [
+  { pattern: /document\.write\s*\(\s*unescape\s*\(/i, reason: 'Obfuscated code (document.write + unescape)' },
+  { pattern: /document\.write\s*\(\s*atob\s*\(/i, reason: 'Obfuscated code (document.write + atob)' },
+  { pattern: /eval\s*\(\s*atob\s*\(/i, reason: 'Obfuscated code (eval + atob)' },
+  { pattern: /eval\s*\(\s*unescape\s*\(/i, reason: 'Obfuscated code (eval + unescape)' },
+  { pattern: /eval\s*\(\s*String\.fromCharCode/i, reason: 'Obfuscated code (eval + fromCharCode)' },
+  { pattern: /<iframe[^>]+style\s*=\s*"[^"]*position\s*:\s*fixed[^"]*width\s*:\s*100%/i, reason: 'Hidden fullscreen iframe overlay' },
+  { pattern: /<iframe[^>]+style\s*=\s*"[^"]*visibility\s*:\s*hidden/i, reason: 'Hidden iframe' },
+  { pattern: /<form[^>]+action\s*=\s*"https?:\/\/[^"]+\.(php|asp|aspx|jsp)/i, reason: 'Form posting credentials to external server' },
+  { pattern: /type\s*=\s*"password".*action\s*=\s*"https?:\/\//is, reason: 'Password field with external form action' },
+  { pattern: /\.php\??(email|user|pass|login|credential)/i, reason: 'Suspected credential exfiltration endpoint' },
+];
+
+function scanFileContent(content) {
+  for (const { pattern, reason } of SUSPICIOUS_PATTERNS) {
+    if (pattern.test(content)) {
+      return reason;
+    }
+  }
+  return null;
+}
+
+function scanDirectory(dirPath) {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      const result = scanDirectory(fullPath);
+      if (result) return result;
+    } else {
+      const ext = path.extname(entry.name).toLowerCase();
+      if (['.html', '.htm', '.js', '.php', '.asp', '.jsp'].includes(ext)) {
+        try {
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          const result = scanFileContent(content);
+          if (result) return `${result} (in ${entry.name})`;
+        } catch {}
+      }
+    }
+  }
+  return null;
+}
+
 // Generate a unique slug
 function generateSlug() {
   let slug;
@@ -640,6 +684,17 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
 
       // Clean up temp file
       fs.unlinkSync(req.file.path);
+    }
+
+    // Scan uploaded content for suspicious patterns
+    const scanResult = scanDirectory(siteDir);
+    if (scanResult) {
+      console.warn(`Upload rejected (slug ${slug}): ${scanResult}`);
+      fs.rmSync(siteDir, { recursive: true, force: true });
+      return res.status(400).json({
+        success: false,
+        error: 'Upload rejected: suspicious content detected. If you believe this is a mistake, please contact support.'
+      });
     }
 
     // Build the URL (always use main domain, not language subdomains)
