@@ -1529,17 +1529,19 @@
 
     // Cookie consent
     const cookieBanner = document.getElementById('cookieBanner');
-    if (localStorage.getItem('cookie-consent')) {
-      cookieBanner.classList.add('hidden');
-    }
+    try {
+      if (localStorage.getItem('cookie-consent')) {
+        cookieBanner.classList.add('hidden');
+      }
+    } catch (e) {}
     document.getElementById('cookieAccept').addEventListener('click', () => {
-      localStorage.setItem('cookie-consent', 'accepted');
       cookieBanner.classList.add('hidden');
+      try { localStorage.setItem('cookie-consent', 'accepted'); } catch (e) {}
       loadGA();
     });
     document.getElementById('cookieDecline').addEventListener('click', () => {
-      localStorage.setItem('cookie-consent', 'declined');
       cookieBanner.classList.add('hidden');
+      try { localStorage.setItem('cookie-consent', 'declined'); } catch (e) {}
     });
 
     // FAQ accordion

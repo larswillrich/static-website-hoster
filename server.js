@@ -182,9 +182,9 @@ app.use((req, res, next) => {
   // CSP for the main landing page (not user-hosted sites)
   if (!req.path.startsWith(`${BASE_PATH}/sites/`)) {
     res.setHeader('Content-Security-Policy',
-      "default-src 'self'; script-src 'self' https://www.google.com https://www.gstatic.com; " +
-      "style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
-      "frame-src https://www.google.com; connect-src 'self'; font-src 'self';"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com; " +
+      "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.googletagmanager.com; " +
+      "frame-src https://www.google.com; connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com; font-src 'self';"
     );
   }
   next();
