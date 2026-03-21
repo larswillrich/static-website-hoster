@@ -590,8 +590,10 @@
   <script>
     // ===== SHARED =====
     const basePath = window.location.pathname.replace(/\/d7x9k2-panel\/?$/, '');
-    const apiBase = basePath + '/api/sites';
-    const analyticsApi = basePath + '/api/analytics';
+    const adminToken = new URLSearchParams(window.location.search).get('token') || '';
+    const tokenParam = adminToken ? `?token=${encodeURIComponent(adminToken)}` : '';
+    const apiBase = basePath + '/api/sites' + tokenParam;
+    const analyticsApi = basePath + '/api/analytics' + tokenParam;
 
     // ===== TAB NAVIGATION =====
     const tabBtns = document.querySelectorAll('.tab-btn');
@@ -702,7 +704,7 @@
       const slug = pendingDeleteSlug;
       closeModal();
       try {
-        const res = await fetch(`${apiBase}/${slug}`, { method: 'DELETE' });
+        const res = await fetch(`${basePath}/api/sites/${slug}${tokenParam}`, { method: 'DELETE' });
         const data = await res.json();
         if (data.success) { sites = sites.filter(s => s.slug !== slug); renderSites(); }
       } catch {}
@@ -754,7 +756,7 @@
       destroyCharts();
 
       try {
-        const res = await fetch(`${analyticsApi}?days=${days}`);
+        const res = await fetch(`${analyticsApi}${adminToken ? '&' : '?'}days=${days}`);
         const data = await res.json();
         renderAnalytics(data);
       } catch {
