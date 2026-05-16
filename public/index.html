@@ -643,6 +643,45 @@
       height: 16px;
     }
 
+    /* Delete-link block (shown on success page; the URL is NOT in the email) */
+    .delete-block {
+      margin-top: 4px;
+      padding: 14px;
+      background: rgba(232, 121, 58, 0.06);
+      border: 1px solid rgba(232, 121, 58, 0.25);
+      border-radius: 10px;
+      text-align: left;
+    }
+    .delete-block-title {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600;
+      color: var(--accent, #e8793a);
+      margin: 0 0 4px;
+    }
+    .delete-block-desc {
+      font-size: 11px;
+      color: var(--text-dim, #888);
+      margin: 0 0 10px;
+      line-height: 1.5;
+    }
+    .delete-url-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(232, 121, 58, 0.15);
+      border-radius: 8px;
+    }
+    .delete-url-row a {
+      flex: 1;
+      font-size: 11px;
+      color: var(--text-dim, #aaa);
+      text-decoration: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+    }
+
     .new-upload-btn {
       display: inline-flex;
       align-items: center;
@@ -1208,6 +1247,25 @@
               </svg>
             </button>
           </div>
+          <div class="delete-block" id="deleteBlock" style="display:none">
+            <p class="delete-block-title" id="deleteBlockTitle">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+              <span id="deleteBlockTitleText">Save your delete link</span>
+            </p>
+            <p class="delete-block-desc" id="deleteBlockDesc">We don't email this. Copy it now if you want to be able to take the site down later.</p>
+            <div class="delete-url-row">
+              <a id="deleteLink" href="#" target="_blank" rel="noopener"></a>
+              <button class="copy-btn" id="deleteCopyBtn" title="Copy delete link" style="width:30px;height:30px">
+                <svg class="copy-icon-default" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <svg class="copy-icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none;width:14px;height:14px">
+                  <polyline points="6 12 10.5 16.5 18 9"/>
+                </svg>
+              </button>
+            </div>
+          </div>
           <button class="new-upload-btn" id="newUploadBtn">Upload another</button>
         </div>
 
@@ -1608,7 +1666,7 @@
               try {
                 const data = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300 && data.success) {
-                  showResult(data.url);
+                  showResult(data.url, data.deleteUrl);
                 } else {
                   showError(data.error || t('errGeneric'));
                 }
@@ -1632,10 +1690,48 @@
       });
     }
 
-    function showResult(url) {
+    function showResult(url, deleteUrl) {
       resultLink.href = url;
       resultLink.textContent = url;
+      const deleteBlock = document.getElementById('deleteBlock');
+      const deleteLink = document.getElementById('deleteLink');
+      if (deleteUrl) {
+        deleteLink.href = deleteUrl;
+        deleteLink.textContent = deleteUrl;
+        deleteBlock.style.display = 'block';
+      } else {
+        deleteBlock.style.display = 'none';
+      }
       showState('result');
+    }
+
+    // Copy button for the delete URL (mirrors the main copyBtn behavior)
+    const deleteCopyBtn = document.getElementById('deleteCopyBtn');
+    if (deleteCopyBtn) {
+      deleteCopyBtn.addEventListener('click', async () => {
+        const href = document.getElementById('deleteLink').href;
+        const setCopied = () => {
+          deleteCopyBtn.querySelector('.copy-icon-default').style.display = 'none';
+          deleteCopyBtn.querySelector('.copy-icon-check').style.display = '';
+          deleteCopyBtn.classList.add('copied');
+          setTimeout(() => {
+            deleteCopyBtn.querySelector('.copy-icon-default').style.display = '';
+            deleteCopyBtn.querySelector('.copy-icon-check').style.display = 'none';
+            deleteCopyBtn.classList.remove('copied');
+          }, 1800);
+        };
+        try {
+          await navigator.clipboard.writeText(href);
+          setCopied();
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = href;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); setCopied(); } catch {}
+          document.body.removeChild(ta);
+        }
+      });
     }
 
     function showError(msg) {
@@ -1770,11 +1866,13 @@
         errInvalidResponse: 'Invalid response from server.',
         errGeneric: 'Something went wrong.',
         emailTitle: 'One last step',
-        emailDesc: 'Enter your email and we\'ll send you the live link plus a private delete link.',
+        emailDesc: 'Enter your email and we\'ll send you the live link. Your private delete link will appear on the next screen — save it.',
         emailPlaceholder: 'you@example.com',
         emailCancel: 'Cancel',
         emailSubmit: 'Continue',
-        emailNote: 'Your email is stored privately and only used to send you the link. We never share it.'
+        emailNote: 'Your email is stored privately and only used to send you the live link. We never share it.',
+        deleteBlockTitle: 'Save your delete link',
+        deleteBlockDesc: 'We don\'t email this. Copy it now if you want to be able to take the site down later.'
       },
       de: {
         title: 'Kostenloses Statisches Website-Hosting',
@@ -1834,11 +1932,13 @@
         errInvalidResponse: 'Ung\u00fcltige Antwort vom Server.',
         errGeneric: 'Etwas ist schiefgelaufen.',
         emailTitle: 'Noch ein letzter Schritt',
-        emailDesc: 'Gib deine E-Mail-Adresse ein \u2014 wir senden dir den Live-Link und einen privaten L\u00f6sch-Link.',
+        emailDesc: 'Gib deine E-Mail-Adresse ein \u2014 wir senden dir den Live-Link. Dein privater L\u00f6sch-Link erscheint auf der n\u00e4chsten Seite \u2014 speichere ihn dort.',
         emailPlaceholder: 'du@beispiel.de',
         emailCancel: 'Abbrechen',
         emailSubmit: 'Weiter',
-        emailNote: 'Deine E-Mail wird privat gespeichert und nur f\u00fcr den Link verwendet. Wir geben sie niemals weiter.'
+        emailNote: 'Deine E-Mail wird privat gespeichert und nur f\u00fcr den Live-Link verwendet. Wir geben sie niemals weiter.',
+        deleteBlockTitle: 'Speichere deinen L\u00f6sch-Link',
+        deleteBlockDesc: 'Wir versenden ihn nicht per E-Mail. Kopiere ihn jetzt, falls du die Seite sp\u00e4ter entfernen m\u00f6chtest.'
       },
       es: {
         title: 'Alojamiento Gratuito de Sitios Web Est\u00e1ticos',
@@ -2118,6 +2218,8 @@
       setText('emailCancel', 'emailCancel');
       setText('emailSubmit', 'emailSubmit');
       setText('emailNote', 'emailNote');
+      setText('deleteBlockTitleText', 'deleteBlockTitle');
+      setText('deleteBlockDesc', 'deleteBlockDesc');
       const emailIn = document.getElementById('emailInput');
       if (emailIn) emailIn.placeholder = t.emailPlaceholder || en.emailPlaceholder;
 

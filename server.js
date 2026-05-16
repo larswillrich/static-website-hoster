@@ -833,42 +833,31 @@ function escapeHtml(s) {
   })[c]);
 }
 
-async function sendSiteCreatedEmail({ to, siteUrl, deleteUrl }) {
+// Minimal transactional email: short subject, one URL. The delete URL is
+// intentionally NOT included — Titan's outbound content filter blocks
+// transactional messages that contain multiple URLs or a long token-shaped
+// link. The delete URL is shown on the post-upload success page instead;
+// users are told to save it because we won't email it.
+async function sendSiteCreatedEmail({ to, siteUrl }) {
   if (!mailTransporter) return { skipped: true };
-  const subject = 'Your site is live on HostMyPage 🎉';
+  const subject = 'Your HostMyPage link';
   const text =
-`Hi there,
+`Hi,
 
-A static site was just uploaded to HostMyPage with this email address.
+Your site is live:
+${siteUrl}
 
-View it:
-  ${siteUrl}
+It expires in ${SITE_MAX_AGE_DAYS} days.
 
-Share that link with anyone you like — no signup needed on their end.
-We'll keep your site online for ${SITE_MAX_AGE_DAYS} days, after which it expires automatically.
-
-If you didn't upload this — or you just want to take it down — click here:
-  ${deleteUrl}
-
-Happy hosting,
-The HostMyPage team
-hello@host-my-page.com`;
+— HostMyPage`;
 
   const html =
-`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;line-height:1.55">
-  <p>Hi there,</p>
-  <p>A static site was just uploaded to <strong>HostMyPage</strong> with this email address.</p>
-  <p style="margin:24px 0">
-    <a href="${escapeHtml(siteUrl)}" style="display:inline-block;background:#e8793a;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">View your site →</a>
-  </p>
-  <p style="color:#555;font-size:14px">Or copy this link: <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a></p>
-  <p>Share that link with anyone — no signup needed on their end.<br>
-  We'll keep your site online for <strong>${SITE_MAX_AGE_DAYS} days</strong>, after which it expires automatically.</p>
-  <hr style="border:none;border-top:1px solid #eee;margin:28px 0">
-  <p style="color:#666;font-size:14px">If you didn't upload this — or you just want to take it down — click here:</p>
-  <p><a href="${escapeHtml(deleteUrl)}" style="color:#c33;font-weight:600">Delete this site</a></p>
-  <p style="color:#888;font-size:12px;word-break:break-all">Or copy this link: <a href="${escapeHtml(deleteUrl)}" style="color:#888">${escapeHtml(deleteUrl)}</a></p>
-  <p style="color:#999;font-size:13px;margin-top:32px">Happy hosting,<br>The HostMyPage team<br><a href="mailto:hello@host-my-page.com" style="color:#999">hello@host-my-page.com</a></p>
+`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:520px;margin:0 auto;color:#1a1a1a;line-height:1.55">
+  <p>Hi,</p>
+  <p>Your site is live:</p>
+  <p><a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a></p>
+  <p style="color:#666;font-size:14px">It expires in ${SITE_MAX_AGE_DAYS} days.</p>
+  <p style="color:#999;font-size:13px;margin-top:24px">— HostMyPage</p>
 </div>`;
 
   return mailTransporter.sendMail({
@@ -1193,12 +1182,14 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
       slug
     });
 
-    // Fire-and-forget email: don't fail the upload if SMTP is down.
-    sendSiteCreatedEmail({ to: email, siteUrl: url, deleteUrl })
+    // Fire-and-forget email: minimal content (one URL only) to avoid the SMTP
+    // provider's content filter. The delete URL is returned in the JSON
+    // response and rendered on the success page instead.
+    sendSiteCreatedEmail({ to: email, siteUrl: url })
       .then(r => { if (!r.skipped) console.log(`Email sent for slug ${slug}`); })
       .catch(err => console.error(`Email send failed for slug ${slug}:`, err.message));
 
-    res.json({ success: true, url, slug, emailSent: !!mailTransporter });
+    res.json({ success: true, url, slug, deleteUrl, emailSent: !!mailTransporter });
   } catch (err) {
     console.error('Upload error:', err);
     // Clean up on failure
