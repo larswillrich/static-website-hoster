@@ -833,12 +833,12 @@ function escapeHtml(s) {
   })[c]);
 }
 
-// Minimal transactional email: short subject, one URL. The delete URL is
-// intentionally NOT included — Titan's outbound content filter blocks
-// transactional messages that contain multiple URLs or a long token-shaped
-// link. The delete URL is shown on the post-upload success page instead;
-// users are told to save it because we won't email it.
-async function sendSiteCreatedEmail({ to, siteUrl }) {
+// Email contains both the public site URL and the per-upload delete URL.
+// Note: Titan's outbound content filter has been observed to block messages
+// with multiple URLs + a long token-shaped link. If deliverability becomes
+// an issue, the previous minimal-email + on-page delete-link approach is
+// available in git history (commit 94666e4).
+async function sendSiteCreatedEmail({ to, siteUrl, deleteUrl }) {
   if (!mailTransporter) return { skipped: true };
   const subject = 'Your HostMyPage link';
   const text =
@@ -849,6 +849,9 @@ ${siteUrl}
 
 It expires in ${SITE_MAX_AGE_DAYS} days.
 
+If you ever want to take it down, use this private delete link:
+${deleteUrl}
+
 — HostMyPage`;
 
   const html =
@@ -857,6 +860,8 @@ It expires in ${SITE_MAX_AGE_DAYS} days.
   <p>Your site is live:</p>
   <p><a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a></p>
   <p style="color:#666;font-size:14px">It expires in ${SITE_MAX_AGE_DAYS} days.</p>
+  <p style="margin-top:20px">If you ever want to take it down, use this private delete link:</p>
+  <p style="word-break:break-all"><a href="${escapeHtml(deleteUrl)}" style="color:#c33">${escapeHtml(deleteUrl)}</a></p>
   <p style="color:#999;font-size:13px;margin-top:24px">— HostMyPage</p>
 </div>`;
 
@@ -1182,14 +1187,13 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
       slug
     });
 
-    // Fire-and-forget email: minimal content (one URL only) to avoid the SMTP
-    // provider's content filter. The delete URL is returned in the JSON
-    // response and rendered on the success page instead.
-    sendSiteCreatedEmail({ to: email, siteUrl: url })
+    // Fire-and-forget email: both links go in the email, nothing extra is
+    // surfaced in the browser response.
+    sendSiteCreatedEmail({ to: email, siteUrl: url, deleteUrl })
       .then(r => { if (!r.skipped) console.log(`Email sent for slug ${slug}`); })
       .catch(err => console.error(`Email send failed for slug ${slug}:`, err.message));
 
-    res.json({ success: true, url, slug, deleteUrl, emailSent: !!mailTransporter });
+    res.json({ success: true, url, slug, emailSent: !!mailTransporter });
   } catch (err) {
     console.error('Upload error:', err);
     // Clean up on failure
