@@ -397,6 +397,83 @@
       display: none;
     }
 
+    /* Email modal (appears after file is selected) */
+    .email-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 9000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .email-overlay.active { display: flex; animation: fadeIn 0.18s ease-out both; }
+    .email-modal {
+      background: var(--card-bg, #16161a);
+      border: 1px solid var(--card-border, #2a2a30);
+      border-radius: 18px;
+      padding: 32px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+      animation: scaleIn 0.22s ease-out both;
+    }
+    .email-modal h2 { margin: 0 0 8px; font-size: 20px; font-weight: 600; color: var(--text, #fff); }
+    .email-modal p { margin: 0 0 20px; color: var(--text-dim, #a0a0a8); font-size: 14px; line-height: 1.55; }
+    .email-modal .file-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(232, 121, 58, 0.08);
+      color: var(--accent, #e8793a);
+      padding: 6px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 500;
+      margin-bottom: 16px; max-width: 100%;
+    }
+    .email-modal .file-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .email-modal input[type="email"] {
+      width: 100%;
+      box-sizing: border-box;
+      background: #0a0a0c;
+      border: 1.5px solid #2a2a30;
+      border-radius: 10px;
+      padding: 13px 14px;
+      color: var(--text, #fff);
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .email-modal input[type="email"]:focus { border-color: var(--accent, #e8793a); }
+    .email-modal input[type="email"].invalid { border-color: #c33; }
+    .email-modal .email-actions {
+      display: flex; gap: 10px; margin-top: 18px;
+    }
+    .email-modal button {
+      flex: 1;
+      border: 0;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .email-modal button.primary { background: var(--accent, #e8793a); color: #fff; }
+    .email-modal button.primary:hover { opacity: 0.92; }
+    .email-modal button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .email-modal button.cancel {
+      background: transparent; color: var(--text-dim, #888);
+      border: 1px solid #2a2a30;
+    }
+    .email-modal button.cancel:hover { color: #fff; border-color: #444; }
+    .email-modal .email-note {
+      font-size: 11px; color: var(--text-dim, #888); margin-top: 12px; line-height: 1.5;
+    }
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
     /* Uploading state */
     .upload-state {
       display: none;
@@ -1153,6 +1230,27 @@
       <div style="position:absolute;left:-9999px" aria-hidden="true">
         <input type="text" name="website" id="hpField" tabindex="-1" autocomplete="off" value="">
       </div>
+
+      <!-- Email modal: appears after a file is dropped, before upload starts -->
+      <div class="email-overlay" id="emailOverlay" role="dialog" aria-modal="true" aria-labelledby="emailTitle">
+        <div class="email-modal">
+          <div class="file-pill" id="emailFilePill">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <span id="emailFileName"></span>
+          </div>
+          <h2 id="emailTitle">One last step</h2>
+          <p id="emailDesc">Enter your email and we'll send you the live link plus a private delete link.</p>
+          <form id="emailForm" novalidate>
+            <input type="email" id="emailInput" placeholder="you@example.com" autocomplete="email" required>
+            <div class="email-actions">
+              <button type="button" class="cancel" id="emailCancel">Cancel</button>
+              <button type="submit" class="primary" id="emailSubmit">Continue</button>
+            </div>
+            <p class="email-note" id="emailNote">Your email is stored privately and only used to send you the link. We never share it.</p>
+          </form>
+        </div>
+      </div>
+
       <p class="upload-hint"><span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span></p>
     </div>
   </main>
@@ -1429,13 +1527,60 @@
       if (fileInput.files[0]) handleFile(fileInput.files[0]);
     });
 
+    // Email modal elements
+    const emailOverlay = document.getElementById('emailOverlay');
+    const emailForm = document.getElementById('emailForm');
+    const emailInput = document.getElementById('emailInput');
+    const emailCancel = document.getElementById('emailCancel');
+    const emailSubmit = document.getElementById('emailSubmit');
+    const emailFileName = document.getElementById('emailFileName');
+
+    let pendingFile = null;
+
+    function openEmailModal(file) {
+      pendingFile = file;
+      emailFileName.textContent = file.name;
+      emailInput.value = '';
+      emailInput.classList.remove('invalid');
+      emailOverlay.classList.add('active');
+      setTimeout(() => emailInput.focus(), 60);
+    }
+    function closeEmailModal() {
+      emailOverlay.classList.remove('active');
+      pendingFile = null;
+    }
+    emailCancel.addEventListener('click', () => { closeEmailModal(); resetToIdle(); });
+    emailOverlay.addEventListener('click', e => { if (e.target === emailOverlay) { closeEmailModal(); resetToIdle(); } });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape' && emailOverlay.classList.contains('active')) { closeEmailModal(); resetToIdle(); }
+    });
+    // Basic client-side email check — server is the authoritative validator
+    const EMAIL_RE = /^[^\s@<>"'`]+@[^\s@<>"'`]+\.[^\s@<>"'`]{2,}$/;
+    emailForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const email = emailInput.value.trim();
+      if (!EMAIL_RE.test(email) || email.length > 254) {
+        emailInput.classList.add('invalid');
+        emailInput.focus();
+        return;
+      }
+      const file = pendingFile;
+      closeEmailModal();
+      if (file) startUpload(file, email);
+    });
+    emailInput.addEventListener('input', () => emailInput.classList.remove('invalid'));
+
     function handleFile(file) {
       const name = file.name.toLowerCase();
       if (!name.endsWith('.zip') && !name.endsWith('.html') && !name.endsWith('.htm')) {
         showError(t('errFileType'));
         return;
       }
+      // Defer the actual upload until the user provides their email.
+      openEmailModal(file);
+    }
 
+    function startUpload(file, email) {
       uploadFileName.textContent = file.name;
       showState('uploading');
 
@@ -1445,6 +1590,7 @@
           grecaptcha.execute('6LedsIMsAAAAAFJgUCPklgFb4nOAlola9IMRdW5Y', { action: 'upload' }).then(function(token) {
             const formData = new FormData();
             formData.append('site', file);
+            formData.append('email', email);
             formData.append('website', document.getElementById('hpField').value);
             formData.append('recaptcha_token', token);
             formData.append('csrf_token', csrf.token);
@@ -1622,7 +1768,13 @@
         errNetwork: 'Network error. Please try again.',
         errTimeout: 'Upload timed out. Please try again.',
         errInvalidResponse: 'Invalid response from server.',
-        errGeneric: 'Something went wrong.'
+        errGeneric: 'Something went wrong.',
+        emailTitle: 'One last step',
+        emailDesc: 'Enter your email and we\'ll send you the live link plus a private delete link.',
+        emailPlaceholder: 'you@example.com',
+        emailCancel: 'Cancel',
+        emailSubmit: 'Continue',
+        emailNote: 'Your email is stored privately and only used to send you the link. We never share it.'
       },
       de: {
         title: 'Kostenloses Statisches Website-Hosting',
@@ -1680,7 +1832,13 @@
         errNetwork: 'Netzwerkfehler. Bitte erneut versuchen.',
         errTimeout: 'Upload-Zeit\u00fcberschreitung. Bitte erneut versuchen.',
         errInvalidResponse: 'Ung\u00fcltige Antwort vom Server.',
-        errGeneric: 'Etwas ist schiefgelaufen.'
+        errGeneric: 'Etwas ist schiefgelaufen.',
+        emailTitle: 'Noch ein letzter Schritt',
+        emailDesc: 'Gib deine E-Mail-Adresse ein \u2014 wir senden dir den Live-Link und einen privaten L\u00f6sch-Link.',
+        emailPlaceholder: 'du@beispiel.de',
+        emailCancel: 'Abbrechen',
+        emailSubmit: 'Weiter',
+        emailNote: 'Deine E-Mail wird privat gespeichert und nur f\u00fcr den Link verwendet. Wir geben sie niemals weiter.'
       },
       es: {
         title: 'Alojamiento Gratuito de Sitios Web Est\u00e1ticos',
@@ -1951,6 +2109,17 @@
 
       // Upload hint
       document.querySelector('.upload-hint').innerHTML = t.uploadHint;
+
+      // Email modal (falls back to English if a locale doesn't define these keys)
+      const en = i18n.en;
+      const setText = (id, key) => { const el = document.getElementById(id); if (el) el.textContent = t[key] || en[key] || ''; };
+      setText('emailTitle', 'emailTitle');
+      setText('emailDesc', 'emailDesc');
+      setText('emailCancel', 'emailCancel');
+      setText('emailSubmit', 'emailSubmit');
+      setText('emailNote', 'emailNote');
+      const emailIn = document.getElementById('emailInput');
+      if (emailIn) emailIn.placeholder = t.emailPlaceholder || en.emailPlaceholder;
 
       // How It Works
       const steps = document.querySelectorAll('.step');

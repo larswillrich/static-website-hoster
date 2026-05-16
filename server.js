@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.enable('strict routing');
@@ -12,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/+$/, ''); // e.g. "/staticwebsite"
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const ANALYTICS_DIR = path.join(__dirname, 'data', 'analytics');
+const SITES_META_DIR = path.join(__dirname, 'data', 'sites-meta');
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_EXTRACTED_SIZE = 200 * 1024 * 1024; // 200 MB max extracted ZIP size
 const MAX_ZIP_FILES = 500; // Max files in a ZIP archive
@@ -20,8 +22,29 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN || ''; // Required for admin panel a
 const REPORTS_DIR = path.join(__dirname, 'data', 'reports');
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
 
+// --- SMTP / email config (credentials must come from env — never hardcoded) ---
+const SMTP_HOST = process.env.SMTP_HOST || '';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT) || 465;
+const SMTP_USER = process.env.SMTP_USER || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
+const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || ''; // optional override (e.g. https://host-my-page.com)
+
+let mailTransporter = null;
+if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+  mailTransporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465, // implicit TLS on 465, STARTTLS otherwise
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+  console.log(`SMTP configured: ${SMTP_USER}@${SMTP_HOST}:${SMTP_PORT}`);
+} else {
+  console.warn('SMTP not configured — upload-confirmation emails will be skipped (set SMTP_HOST/USER/PASS to enable).');
+}
+
 // --- Analytics logging (DSGVO-compliant, no cookies, hashed IPs) ---
-for (const dir of [ANALYTICS_DIR, REPORTS_DIR, path.join(__dirname, 'data')]) {
+for (const dir of [ANALYTICS_DIR, REPORTS_DIR, SITES_META_DIR, path.join(__dirname, 'data')]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -571,6 +594,7 @@ function cleanExpiredSites() {
         const stats = fs.statSync(dirPath);
         if (now - stats.birthtimeMs > maxAge) {
           fs.rmSync(dirPath, { recursive: true, force: true });
+          deleteSiteMeta(entry.name);
           console.log(`Auto-expired site: ${entry.name}`);
         }
       } catch {}
@@ -770,6 +794,91 @@ function scanDirectoryContent(dirPath) {
   return null;
 }
 
+// --- Email validation + persistence + sending ---
+// Conservative email regex: local@domain.tld, ≤254 chars. Intentionally not RFC-5321 strict.
+function isValidEmail(s) {
+  if (typeof s !== 'string') return false;
+  s = s.trim();
+  if (s.length < 5 || s.length > 254) return false;
+  return /^[^\s@<>"'`]+@[^\s@<>"'`]+\.[^\s@<>"'`]{2,}$/.test(s);
+}
+
+function saveSiteMeta(slug, meta) {
+  fs.writeFileSync(path.join(SITES_META_DIR, `${slug}.json`), JSON.stringify(meta));
+}
+
+function loadSiteMeta(slug) {
+  try {
+    const raw = fs.readFileSync(path.join(SITES_META_DIR, `${slug}.json`), 'utf-8');
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function deleteSiteMeta(slug) {
+  try { fs.unlinkSync(path.join(SITES_META_DIR, `${slug}.json`)); } catch {}
+}
+
+// Public origin used in outgoing emails. Falls back to req-derived host so the
+// dev server works without PUBLIC_BASE_URL set.
+function getPublicOrigin(req) {
+  if (PUBLIC_BASE_URL) return PUBLIC_BASE_URL.replace(/\/+$/, '');
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = getMainDomainHost(req);
+  return `${protocol}://${host}`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
+async function sendSiteCreatedEmail({ to, siteUrl, deleteUrl }) {
+  if (!mailTransporter) return { skipped: true };
+  const subject = 'Your site is live on HostMyPage 🎉';
+  const text =
+`Hi there,
+
+A static site was just uploaded to HostMyPage with this email address.
+
+View it:
+  ${siteUrl}
+
+Share that link with anyone you like — no signup needed on their end.
+We'll keep your site online for ${SITE_MAX_AGE_DAYS} days, after which it expires automatically.
+
+If you didn't upload this — or you just want to take it down — click here:
+  ${deleteUrl}
+
+Happy hosting,
+The HostMyPage team
+hello@host-my-page.com`;
+
+  const html =
+`<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;color:#1a1a1a;line-height:1.55">
+  <p>Hi there,</p>
+  <p>A static site was just uploaded to <strong>HostMyPage</strong> with this email address.</p>
+  <p style="margin:24px 0">
+    <a href="${escapeHtml(siteUrl)}" style="display:inline-block;background:#e8793a;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600">View your site →</a>
+  </p>
+  <p style="color:#555;font-size:14px">Or copy this link: <a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a></p>
+  <p>Share that link with anyone — no signup needed on their end.<br>
+  We'll keep your site online for <strong>${SITE_MAX_AGE_DAYS} days</strong>, after which it expires automatically.</p>
+  <hr style="border:none;border-top:1px solid #eee;margin:28px 0">
+  <p style="color:#666;font-size:14px">If you didn't upload this — or you just want to take it down — click here:</p>
+  <p><a href="${escapeHtml(deleteUrl)}" style="color:#c33;font-weight:600">Delete this site</a></p>
+  <p style="color:#999;font-size:13px;margin-top:32px">Happy hosting,<br>The HostMyPage team<br><a href="mailto:hello@host-my-page.com" style="color:#999">hello@host-my-page.com</a></p>
+</div>`;
+
+  return mailTransporter.sendMail({
+    from: SMTP_FROM,
+    to,
+    subject,
+    text,
+    html,
+  });
+}
+
 // Generate a unique slug
 function generateSlug() {
   let slug;
@@ -808,11 +917,13 @@ app.get(`${BASE_PATH}/api/sites`, requireAdmin, (req, res) => {
         const protocol = req.headers['x-forwarded-proto'] || req.protocol;
         const host = getMainDomainHost(req);
         const url = `${protocol}://${host}${BASE_PATH}/sites/${entry.name}/`;
+        const meta = loadSiteMeta(entry.name);
         return {
           slug: entry.name,
           url,
           createdAt: stats.birthtime.toISOString(),
-          size
+          size,
+          email: meta?.email || null, // admin-only — never exposed on /sites/
         };
       })
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -840,10 +951,82 @@ app.delete(`${BASE_PATH}/api/sites/:slug`, requireAdmin, (req, res) => {
 
   try {
     fs.rmSync(siteDir, { recursive: true, force: true });
+    deleteSiteMeta(slug);
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting site:', err);
     res.status(500).json({ error: 'Failed to delete site.' });
+  }
+});
+
+// --- User-facing delete flow (token-based, no admin auth required) ---
+// GET shows a confirmation page. POST actually deletes. Two-step so that email
+// link-preview bots (Outlook/Gmail/Slack) cannot accidentally delete sites by
+// prefetching the URL.
+function timingSafeEq(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+function deletePageHtml({ slug, token, mode, message }) {
+  // mode: 'confirm' | 'deleted' | 'error'
+  const body =
+    mode === 'deleted'
+      ? `<h1>Site deleted</h1><p>The site <code>${escapeHtml(slug)}</code> has been permanently removed.</p>`
+      : mode === 'error'
+      ? `<h1>Link no longer valid</h1><p>${escapeHtml(message || 'This delete link is invalid or the site has already been removed.')}</p>`
+      : `<h1>Delete this site?</h1>
+         <p>You're about to permanently delete <code>${escapeHtml(slug)}</code> and its email association. This cannot be undone.</p>
+         <form method="POST" action="${BASE_PATH}/delete/${escapeHtml(slug)}/${escapeHtml(token)}">
+           <button type="submit" class="danger">Yes, delete it</button>
+           <a class="cancel" href="${BASE_PATH}/">Cancel</a>
+         </form>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<title>Delete site — HostMyPage</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0e0e11;color:#eaeaea;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:#16161a;border:1px solid #2a2a30;border-radius:16px;padding:36px;max-width:480px;text-align:center}
+  h1{font-size:22px;margin:0 0 14px}
+  p{color:#bbb;line-height:1.6}
+  code{background:#0a0a0c;padding:2px 8px;border-radius:6px;color:#e8793a}
+  button.danger{background:#c33;color:#fff;border:0;padding:12px 24px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;margin-right:12px}
+  button.danger:hover{background:#a22}
+  a.cancel{color:#888;text-decoration:none;padding:12px 16px}
+  a.cancel:hover{color:#fff}
+</style></head><body><div class="card">${body}</div></body></html>`;
+}
+
+app.get(`${BASE_PATH}/delete/:slug/:token`, (req, res) => {
+  const { slug, token } = req.params;
+  if (!/^[0-9a-f]{8}$/.test(slug) || !/^[0-9a-f]{64}$/.test(token)) {
+    return res.status(404).type('html').send(deletePageHtml({ slug: '', token: '', mode: 'error' }));
+  }
+  const meta = loadSiteMeta(slug);
+  if (!meta || !timingSafeEq(meta.deleteToken, token)) {
+    return res.status(404).type('html').send(deletePageHtml({ slug, token, mode: 'error' }));
+  }
+  res.type('html').send(deletePageHtml({ slug, token, mode: 'confirm' }));
+});
+
+app.post(`${BASE_PATH}/delete/:slug/:token`, (req, res) => {
+  const { slug, token } = req.params;
+  if (!/^[0-9a-f]{8}$/.test(slug) || !/^[0-9a-f]{64}$/.test(token)) {
+    return res.status(404).type('html').send(deletePageHtml({ slug: '', token: '', mode: 'error' }));
+  }
+  const meta = loadSiteMeta(slug);
+  if (!meta || !timingSafeEq(meta.deleteToken, token)) {
+    return res.status(404).type('html').send(deletePageHtml({ slug, token, mode: 'error' }));
+  }
+  const siteDir = path.join(UPLOADS_DIR, slug);
+  try {
+    if (fs.existsSync(siteDir)) fs.rmSync(siteDir, { recursive: true, force: true });
+    deleteSiteMeta(slug);
+    console.log(`User-initiated delete: slug ${slug}`);
+    res.type('html').send(deletePageHtml({ slug, token: '', mode: 'deleted' }));
+  } catch (err) {
+    console.error('User delete error:', err.message);
+    res.status(500).type('html').send(deletePageHtml({ slug, token: '', mode: 'error', message: 'Could not delete the site. Please try again.' }));
   }
 });
 
@@ -905,6 +1088,14 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
 
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'No file uploaded.' });
+  }
+
+  // Email is required: users get the public link + delete link via email,
+  // and the address is stored server-side (admin-only) for abuse handling.
+  const email = (req.body && req.body.email || '').trim();
+  if (!isValidEmail(email)) {
+    try { fs.unlinkSync(req.file.path); } catch {}
+    return res.status(400).json({ success: false, error: 'A valid email address is required.' });
   }
 
   const slug = generateSlug();
@@ -982,7 +1173,16 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
     const host = getMainDomainHost(req);
     const url = `${protocol}://${host}${BASE_PATH}/sites/${slug}/`;
 
-    // Log upload event (DSGVO-compliant)
+    // Persist email + delete token in admin-only meta store (NOT under /sites/, never web-served)
+    const deleteToken = crypto.randomBytes(32).toString('hex');
+    const deleteUrl = `${getPublicOrigin(req)}${BASE_PATH}/delete/${slug}/${deleteToken}`;
+    saveSiteMeta(slug, {
+      email,
+      deleteToken,
+      createdAt: new Date().toISOString(),
+    });
+
+    // Log upload event (DSGVO-compliant — email is NOT logged here, only stored in admin meta)
     logAnalyticsEvent('upload', {
       ipHash: hashIP(getClientIP(req)),
       userAgent: req.headers['user-agent'] || '',
@@ -992,7 +1192,12 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
       slug
     });
 
-    res.json({ success: true, url, slug });
+    // Fire-and-forget email: don't fail the upload if SMTP is down.
+    sendSiteCreatedEmail({ to: email, siteUrl: url, deleteUrl })
+      .then(r => { if (!r.skipped) console.log(`Email sent for slug ${slug}`); })
+      .catch(err => console.error(`Email send failed for slug ${slug}:`, err.message));
+
+    res.json({ success: true, url, slug, emailSent: !!mailTransporter });
   } catch (err) {
     console.error('Upload error:', err);
     // Clean up on failure
