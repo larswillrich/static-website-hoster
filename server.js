@@ -536,8 +536,13 @@ function safeExtractZip(zipPath, destDir) {
       return { error: 'ZIP contains path traversal entries.' };
     }
 
-    // Symlink protection
-    if (entry.header.attr && (entry.header.attr & 0xA0000000) !== 0) {
+    // Symlink protection: extract UNIX file-type bits from external attr and
+    // reject only when the type is symlink (S_IFLNK). The old check `attr &
+    // 0xA0000000` also matched S_IFREG=0x8000 (regular files), causing every
+    // UNIX-mode ZIP entry to be rejected.
+    const unixMode = (entry.header.attr >>> 16) & 0xFFFF;
+    const S_IFMT = 0xF000, S_IFLNK = 0xA000;
+    if ((unixMode & S_IFMT) === S_IFLNK) {
       return { error: 'ZIP contains symbolic links.' };
     }
 
@@ -579,27 +584,38 @@ function cleanExpiredSites() {
 cleanExpiredSites();
 setInterval(cleanExpiredSites, 6 * 60 * 60 * 1000);
 
-// --- Dangerous file extension blocklist ---
-const BLOCKED_EXTENSIONS = new Set([
-  '.php', '.php3', '.php4', '.php5', '.phtml',
-  '.asp', '.aspx', '.jsp', '.jspx',
-  '.cgi', '.pl', '.py', '.rb', '.sh', '.bash',
-  '.exe', '.bat', '.cmd', '.com', '.msi', '.dll', '.scr', '.pif',
-  '.jar', '.war', '.class',
-  '.htaccess', '.htpasswd',
+// --- File extension allowlist (only these may be served from /sites/) ---
+// Anything not on this list is rejected outright. Files with no extension
+// (LICENSE, README) are permitted; dotfiles (.env, .htaccess, .git) are not.
+const ALLOWED_EXTENSIONS = new Set([
+  '',
+  '.html', '.htm',
+  '.css',
+  '.js', '.mjs', '.map',
+  '.json', '.xml', '.txt', '.csv', '.md', '.yml', '.yaml',
+  '.webmanifest', '.manifest',
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.avif', '.bmp', '.tif', '.tiff',
+  '.woff', '.woff2', '.ttf', '.otf', '.eot',
+  '.pdf',
+  '.mp4', '.webm', '.mov', '.m4v', '.ogv',
+  '.mp3', '.wav', '.ogg', '.m4a', '.flac',
 ]);
 
-function checkBlockedExtensions(dirPath) {
+function checkFileExtensions(dirPath) {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
   for (const entry of entries) {
+    // Reject dotfiles: .env / .htaccess / .htpasswd / .git / etc. leak secrets or override server behavior.
+    if (entry.name.startsWith('.')) {
+      return `Dotfiles are not allowed: ${entry.name}`;
+    }
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      const result = checkBlockedExtensions(fullPath);
+      const result = checkFileExtensions(fullPath);
       if (result) return result;
     } else {
       const ext = path.extname(entry.name).toLowerCase();
-      if (BLOCKED_EXTENSIONS.has(ext)) {
-        return `Blocked file type: ${ext} (${entry.name})`;
+      if (!ALLOWED_EXTENSIONS.has(ext)) {
+        return `File type not allowed: ${ext || '(no extension)'} (${entry.name})`;
       }
     }
   }
@@ -607,6 +623,8 @@ function checkBlockedExtensions(dirPath) {
 }
 
 // --- Upload content scanner (detect phishing, credential harvesting, etc.) ---
+// Patterns with `jsOnly: true` are only matched against .js / .mjs files (avoids
+// false positives on legitimately embedded base64 fonts/images in HTML).
 const SUSPICIOUS_PATTERNS = [
   // Obfuscated code
   { pattern: /document\.write\s*\(\s*unescape\s*\(/i, reason: 'Obfuscated code (document.write + unescape)' },
@@ -617,10 +635,19 @@ const SUSPICIOUS_PATTERNS = [
   // Hidden iframes
   { pattern: /<iframe[^>]+style\s*=\s*"[^"]*position\s*:\s*fixed[^"]*width\s*:\s*100%/i, reason: 'Hidden fullscreen iframe overlay' },
   { pattern: /<iframe[^>]+style\s*=\s*"[^"]*visibility\s*:\s*hidden/i, reason: 'Hidden iframe' },
-  // Credential harvesting
+  // Credential harvesting — password fields are not legitimate on a static-only hoster
+  { pattern: /<input[^>]+type\s*=\s*["']?password["']?/i, reason: 'Password input field (not allowed on static hosting)' },
   { pattern: /<form[^>]+action\s*=\s*"https?:\/\/[^"]+\.(php|asp|aspx|jsp)/i, reason: 'Form posting credentials to external server' },
-  { pattern: /type\s*=\s*"password".*action\s*=\s*"https?:\/\//is, reason: 'Password field with external form action' },
   { pattern: /\.php\??(email|user|pass|login|credential)/i, reason: 'Suspected credential exfiltration endpoint' },
+  { pattern: /fetch\s*\([\s\S]{0,500}(?:password|passwd|credential)/i, reason: 'fetch() call referencing password/credential data' },
+  { pattern: /XMLHttpRequest[\s\S]{0,500}(?:password|passwd|credential)/i, reason: 'XHR referencing password/credential data' },
+  // Known exfiltration endpoints (seen in Outlook phishing kit and similar)
+  { pattern: /api\.telegram\.org/i, reason: 'Telegram bot API endpoint (data exfiltration)' },
+  { pattern: /discord(?:app)?\.com\/api\/webhooks/i, reason: 'Discord webhook endpoint (data exfiltration)' },
+  { pattern: /\bTELEGRAM_(?:BOT_)?TOKEN\b|\bTELEGRAM_CHAT_ID\b/i, reason: 'Hardcoded Telegram credentials' },
+  { pattern: /["']\d{9,12}:[A-Za-z0-9_-]{30,}["']/, reason: 'Telegram bot token literal' },
+  // IP / geolocation fingerprinting services
+  { pattern: /\b(?:ipapi\.co|ip-api\.com|ipinfo\.io|api\.ipify\.org|geolocation-db\.com|freegeoip\.app|ipwho\.is|ipgeolocation\.io)\b/i, reason: 'IP / geolocation fingerprinting service' },
   // External script loading (phishing kits, skimmers)
   { pattern: /<script[^>]+src\s*=\s*"https?:\/\/[^"]*\.(tk|ml|ga|cf|gq|buzz|top|work|click|surf)\//i, reason: 'Script loaded from suspicious TLD' },
   // Crypto miners
@@ -632,9 +659,11 @@ const SUSPICIOUS_PATTERNS = [
   { pattern: /window\.location\s*[=.]\s*["']https?:\/\//i, reason: 'JavaScript redirect to external URL' },
   { pattern: /location\s*\.\s*replace\s*\(\s*["']https?:\/\//i, reason: 'JavaScript redirect to external URL' },
   { pattern: /location\s*\.\s*href\s*=\s*["']https?:\/\//i, reason: 'JavaScript redirect to external URL' },
-  // Base64 payload hiding (large blobs > 5KB suggest obfuscation)
+  // Base64 payload hiding
   { pattern: /atob\s*\(\s*["'][A-Za-z0-9+/=]{5000,}["']\s*\)/i, reason: 'Large Base64-encoded payload (possible obfuscation)' },
   { pattern: /data:text\/html;base64,[A-Za-z0-9+/=]{1000,}/i, reason: 'Base64-encoded HTML data URI' },
+  // JS-only: long base64-looking literals (>500 chars) — legit inside HTML (fonts/images) but suspicious in pure JS
+  { pattern: /["'][A-Za-z0-9+/]{500,}={0,2}["']/, reason: 'Long Base64-encoded literal in JS (possible obfuscation)', jsOnly: true },
 ];
 
 // Content hash tracking for previously flagged uploads
@@ -670,8 +699,12 @@ function hashDirectoryContent(dirPath) {
   return hash.digest('hex');
 }
 
-function scanFileContent(content) {
-  for (const { pattern, reason } of SUSPICIOUS_PATTERNS) {
+const SCANNABLE_EXTENSIONS = new Set(['.html', '.htm', '.js', '.mjs']);
+
+function scanFileContent(content, ext) {
+  const isJs = ext === '.js' || ext === '.mjs';
+  for (const { pattern, reason, jsOnly } of SUSPICIOUS_PATTERNS) {
+    if (jsOnly && !isJs) continue;
     if (pattern.test(content)) {
       return reason;
     }
@@ -680,9 +713,9 @@ function scanFileContent(content) {
 }
 
 function scanDirectory(dirPath) {
-  // Check blocked file extensions first
-  const blockedResult = checkBlockedExtensions(dirPath);
-  if (blockedResult) return blockedResult;
+  // Enforce extension allowlist first (also rejects dotfiles like .env / .htaccess)
+  const extResult = checkFileExtensions(dirPath);
+  if (extResult) return extResult;
 
   // Check content hash against previously flagged uploads
   const contentHash = hashDirectoryContent(dirPath);
@@ -696,17 +729,15 @@ function scanDirectory(dirPath) {
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
     if (entry.isDirectory()) {
-      // Skip blocked extensions check (already done above) — only scan content
       const result = scanDirectoryContent(fullPath);
       if (result) return result;
     } else {
       const ext = path.extname(entry.name).toLowerCase();
-      if (['.html', '.htm', '.js'].includes(ext)) {
+      if (SCANNABLE_EXTENSIONS.has(ext)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf-8');
-          const result = scanFileContent(content);
+          const result = scanFileContent(content, ext);
           if (result) {
-            // Save hash so re-uploads of same content are instantly blocked
             saveFlaggedHash(contentHash);
             return `${result} (in ${entry.name})`;
           }
@@ -717,7 +748,7 @@ function scanDirectory(dirPath) {
   return null;
 }
 
-// Content-only scan for subdirectories (extension check already done at top level)
+// Content-only scan for subdirectories (extension allowlist already enforced at top level)
 function scanDirectoryContent(dirPath) {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
   for (const entry of entries) {
@@ -727,10 +758,10 @@ function scanDirectoryContent(dirPath) {
       if (result) return result;
     } else {
       const ext = path.extname(entry.name).toLowerCase();
-      if (['.html', '.htm', '.js'].includes(ext)) {
+      if (SCANNABLE_EXTENSIONS.has(ext)) {
         try {
           const content = fs.readFileSync(fullPath, 'utf-8');
-          const result = scanFileContent(content);
+          const result = scanFileContent(content, ext);
           if (result) return `${result} (in ${entry.name})`;
         } catch {}
       }
@@ -975,8 +1006,13 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
 
 // Serve hosted static sites with analytics tracking and sandbox headers
 app.use(`${BASE_PATH}/sites`, (req, res, next) => {
-  // Sandbox user-hosted content: restrict capabilities to prevent cross-origin attacks
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'none';");
+  // Sandbox user-hosted content: block exfiltration (fetch/XHR/WebSocket, form
+  // submission, <base> hijack, plugins) while still allowing the page to render.
+  // connect-src/form-action are constrained to 'self' so an SPA can load its own
+  // JSON, but nothing can POST credentials to Telegram/Discord/etc.
+  res.setHeader('Content-Security-Policy',
+    "frame-ancestors 'none'; connect-src 'self'; form-action 'self'; base-uri 'self'; object-src 'none';"
+  );
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
