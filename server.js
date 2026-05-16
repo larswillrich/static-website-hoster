@@ -867,6 +867,7 @@ hello@host-my-page.com`;
   <hr style="border:none;border-top:1px solid #eee;margin:28px 0">
   <p style="color:#666;font-size:14px">If you didn't upload this — or you just want to take it down — click here:</p>
   <p><a href="${escapeHtml(deleteUrl)}" style="color:#c33;font-weight:600">Delete this site</a></p>
+  <p style="color:#888;font-size:12px;word-break:break-all">Or copy this link: <a href="${escapeHtml(deleteUrl)}" style="color:#888">${escapeHtml(deleteUrl)}</a></p>
   <p style="color:#999;font-size:13px;margin-top:32px">Happy hosting,<br>The HostMyPage team<br><a href="mailto:hello@host-my-page.com" style="color:#999">hello@host-my-page.com</a></p>
 </div>`;
 
