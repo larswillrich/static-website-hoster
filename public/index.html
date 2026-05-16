@@ -634,10 +634,19 @@
     .result-hint {
       font-size: 11.5px;
       color: var(--text-muted, #777);
+      margin: 0 auto 8px;
+      max-width: 320px;
+      line-height: 1.5;
+    }
+
+    .result-expiry {
+      font-size: 11.5px;
+      color: var(--text-muted, #777);
       margin: 0 auto 22px;
       max-width: 320px;
       line-height: 1.5;
     }
+    .result-expiry strong { color: var(--text-dim, #aaa); font-weight: 600; }
 
     .url-box {
       display: flex;
@@ -1255,6 +1264,7 @@
             <span class="result-email" id="resultEmail"></span>
           </p>
           <p class="result-hint" id="resultHint">Tip: check your spam folder if you don't see it within a minute.</p>
+          <p class="result-expiry" id="resultExpiry">Your site will stay online for <strong>__SITE_MAX_AGE_DAYS__ days</strong>, then it expires automatically.</p>
           <button class="new-upload-btn" id="newUploadBtn">Upload another</button>
         </div>
 
@@ -1482,6 +1492,13 @@
             <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="faq-answer"><div class="faq-answer-inner">Static website hosting serves pre-built HTML, CSS, and JavaScript files directly to visitors without server-side processing. It's faster, more secure, and simpler than dynamic hosting. Static sites are ideal for portfolios, landing pages, documentation, and AI-generated websites.</div></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-question" aria-expanded="false">
+            <span>How long does my site stay online?</span>
+            <svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="faq-answer"><div class="faq-answer-inner">Every uploaded site stays online for __SITE_MAX_AGE_DAYS__ days from the moment you upload it. After that it expires and is removed automatically. You can also delete it yourself at any time using the private delete link in the confirmation email.</div></div>
         </div>
       </div>
     </section>
@@ -1745,6 +1762,7 @@
         resultTitle: 'Check your inbox',
         resultSubtitle: 'We sent your link to',
         resultHint: 'Tip: check your spam folder if you don\'t see it within a minute.',
+        resultExpiry: 'Your site will stay online for <strong>__SITE_MAX_AGE_DAYS__ days</strong>, then it expires automatically.',
         uploadAnother: 'Upload another',
         uploadFailed: 'Upload failed',
         tryAgain: 'Try again',
@@ -1782,6 +1800,8 @@
         faq5A: 'Yes, HostMyPage is completely free to use. There are no hidden fees, no premium tiers, and no credit card required. Upload your static website and share it with the world at no cost.',
         faq6Q: 'What is static website hosting?',
         faq6A: 'Static website hosting serves pre-built HTML, CSS, and JavaScript files directly to visitors without server-side processing. It\'s faster, more secure, and simpler than dynamic hosting. Static sites are ideal for portfolios, landing pages, documentation, and AI-generated websites.',
+        faq7Q: 'How long does my site stay online?',
+        faq7A: 'Every uploaded site stays online for __SITE_MAX_AGE_DAYS__ days from the moment you upload it. After that it expires and is removed automatically. You can also delete it yourself at any time using the private delete link in the confirmation email.',
         cookieText: 'We use cookies for analytics to improve our service. See our <a href="./privacy">Privacy Policy</a> for details.',
         cookieDecline: 'Decline', cookieAccept: 'Accept',
         footerLine: 'HostMyPage &mdash; Free static website hosting.',
@@ -1810,6 +1830,7 @@
         resultTitle: 'Schau in dein Postfach',
         resultSubtitle: 'Wir haben deinen Link gesendet an',
         resultHint: 'Tipp: Schau auch im Spam-Ordner nach, falls die Mail nicht innerhalb einer Minute ankommt.',
+        resultExpiry: 'Deine Seite bleibt <strong>__SITE_MAX_AGE_DAYS__ Tage</strong> online, danach wird sie automatisch gelöscht.',
         uploadAnother: 'Weitere hochladen',
         uploadFailed: 'Upload fehlgeschlagen',
         tryAgain: 'Erneut versuchen',
@@ -1847,6 +1868,8 @@
         faq5A: 'Ja, HostMyPage ist komplett kostenlos. Keine versteckten Geb\u00fchren, keine Premium-Stufen, keine Kreditkarte erforderlich.',
         faq6Q: 'Was ist statisches Website-Hosting?',
         faq6A: 'Statisches Website-Hosting liefert vorgefertigte HTML-, CSS- und JavaScript-Dateien direkt an Besucher, ohne serverseitige Verarbeitung. Es ist schneller, sicherer und einfacher als dynamisches Hosting.',
+        faq7Q: 'Wie lange bleibt meine Seite online?',
+        faq7A: 'Jede hochgeladene Seite bleibt ab dem Upload-Zeitpunkt für __SITE_MAX_AGE_DAYS__ Tage online. Danach läuft sie ab und wird automatisch entfernt. Du kannst sie aber auch jederzeit selbst über den privaten Lösch-Link in der Bestätigungs-E-Mail entfernen.',
         cookieText: 'Wir verwenden Cookies f\u00fcr Analysen zur Verbesserung unseres Dienstes. Details in unserer <a href="./privacy">Datenschutzerkl\u00e4rung</a>.',
         cookieDecline: 'Ablehnen', cookieAccept: 'Akzeptieren',
         footerLine: 'HostMyPage &mdash; Kostenloses statisches Website-Hosting.',
@@ -2133,6 +2156,8 @@
       if (prefix) prefix.textContent = t.resultSubtitle + ' ';
       const hint = document.getElementById('resultHint');
       if (hint) hint.textContent = t.resultHint || i18n.en.resultHint;
+      const expiry = document.getElementById('resultExpiry');
+      if (expiry) expiry.innerHTML = t.resultExpiry || i18n.en.resultExpiry;
       newUploadBtn.textContent = t.uploadAnother;
 
       // Error state

@@ -424,6 +424,10 @@ app.get(`${BASE_PATH}/`, (req, res) => {
     `let currentLang = '${lang}';`
   );
 
+  // Inject the site lifetime so the FAQ + success-page text always show
+  // the real configured value (no hardcoded "30" to drift out of sync).
+  html = html.replace(/__SITE_MAX_AGE_DAYS__/g, String(SITE_MAX_AGE_DAYS));
+
   // Track landing page visit for conversion rate
   logAnalyticsEvent('landing', {
     ipHash: hashIP(getClientIP(req)),
@@ -452,6 +456,8 @@ function serveWithHreflang(pagePath, filePath) {
     }
     hreflangTags += `  <link rel="alternate" hreflang="x-default" href="${langUrl(DEFAULT_LANG, pagePath, protocol)}" />\n`;
     html = html.replace('</head>', `${hreflangTags}</head>`);
+    // Inject configured site lifetime
+    html = html.replace(/__SITE_MAX_AGE_DAYS__/g, String(SITE_MAX_AGE_DAYS));
     res.setHeader('Vary', 'Host');
     res.type('html').send(html);
   });
