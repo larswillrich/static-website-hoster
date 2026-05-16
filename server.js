@@ -17,7 +17,10 @@ const SITES_META_DIR = path.join(__dirname, 'data', 'sites-meta');
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 const MAX_EXTRACTED_SIZE = 200 * 1024 * 1024; // 200 MB max extracted ZIP size
 const MAX_ZIP_FILES = 500; // Max files in a ZIP archive
-const SITE_MAX_AGE_DAYS = parseInt(process.env.SITE_MAX_AGE_DAYS) || 30; // Auto-expiry
+// Auto-expiry. Using `|| 30` would silently fall back to 30 when an operator
+// explicitly sets SITE_MAX_AGE_DAYS=0, so handle NaN/missing separately.
+const _siteMaxAgeRaw = parseInt(process.env.SITE_MAX_AGE_DAYS);
+const SITE_MAX_AGE_DAYS = Number.isFinite(_siteMaxAgeRaw) ? _siteMaxAgeRaw : 30;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || ''; // Required for admin panel access
 const REPORTS_DIR = path.join(__dirname, 'data', 'reports');
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
