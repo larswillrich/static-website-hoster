@@ -632,6 +632,10 @@ const ALLOWED_EXTENSIONS = new Set([
   '.pdf',
   '.mp4', '.webm', '.mov', '.m4v', '.ogv',
   '.mp3', '.wav', '.ogg', '.m4a', '.flac',
+  // Game-engine / WebAssembly / 3D asset bundles (executed only in the browser sandbox)
+  '.wasm', '.unityweb', '.data', '.bin', '.bundle',
+  '.gltf', '.glb', '.fbx', '.obj', '.mtl',
+  '.lipsync', '.vtsres',
 ]);
 
 function checkFileExtensions(dirPath) {
