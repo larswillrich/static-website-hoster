@@ -1240,6 +1240,12 @@
       </header>
 
       <div class="card">
+        <noscript>
+          <div style="padding:20px;background:rgba(232,121,58,0.08);border:1px solid rgba(232,121,58,0.25);border-radius:10px;color:#e8793a;text-align:center;font-size:13px;line-height:1.5">
+            <strong>JavaScript is required</strong><br>
+            The upload form needs JavaScript to securely hand your file to our server (drag-and-drop, CSRF, reCAPTCHA). Please enable JavaScript and reload the page.
+          </div>
+        </noscript>
         <!-- Drop zone (idle state) -->
         <div class="drop-zone" id="dropZone" tabindex="0" role="button" aria-label="Upload HTML or ZIP file for free static website hosting">
           <div class="drop-icon">
@@ -1588,7 +1594,27 @@
     });
 
     dropZone.addEventListener('drop', e => {
-      const file = e.dataTransfer.files[0];
+      const dt = e.dataTransfer;
+      // Multiple files dropped → tell the user explicitly, don't silently pick #0
+      if (dt.files && dt.files.length > 1) {
+        showError(t('errMultiFile'));
+        return;
+      }
+      // Folder dropped → in modern browsers .webkitGetAsEntry().isDirectory tells us;
+      // .files is also typically empty for a folder drag, which is the second signal.
+      if (dt.items && dt.items[0] && typeof dt.items[0].webkitGetAsEntry === 'function') {
+        const entry = dt.items[0].webkitGetAsEntry();
+        if (entry && entry.isDirectory) {
+          showError(t('errFolderDrop'));
+          return;
+        }
+      }
+      if ((!dt.files || dt.files.length === 0) && dt.items && dt.items.length > 0) {
+        // Items present but no file — typically a folder on older browsers, or non-file data
+        showError(t('errFolderDrop'));
+        return;
+      }
+      const file = dt.files[0];
       if (file) handleFile(file);
     });
 
@@ -1602,7 +1628,13 @@
     });
 
     fileInput.addEventListener('change', () => {
-      if (fileInput.files[0]) handleFile(fileInput.files[0]);
+      if (!fileInput.files || fileInput.files.length === 0) return;
+      if (fileInput.files.length > 1) {
+        showError(t('errMultiFile'));
+        fileInput.value = '';
+        return;
+      }
+      handleFile(fileInput.files[0]);
     });
 
     // Inline email panel elements
@@ -1687,17 +1719,27 @@
             });
 
             xhr.addEventListener('load', () => {
-              try {
-                const data = JSON.parse(xhr.responseText);
-                if (xhr.status >= 200 && xhr.status < 300 && data.success) {
-                  // We deliberately don't expose data.url — the user must
-                  // get the link from the email they were just sent.
-                  showResult(email);
-                } else {
-                  showError(data.error || t('errGeneric'));
-                }
-              } catch {
-                showError(t('errInvalidResponse'));
+              // Status-code-specific handling for responses that come from a
+              // reverse proxy (nginx / Traefik / Cloudflare) instead of our app —
+              // they usually return HTML, not JSON, so the parse step below
+              // would otherwise fall through to a generic "invalid response".
+              if (xhr.status === 413) { showError(t('errProxy413')); return; }
+              if (xhr.status === 502 || xhr.status === 504) { showError(t('errProxyGateway')); return; }
+              if (xhr.status === 0)  { showError(t('errNetwork')); return; }
+
+              let data;
+              try { data = JSON.parse(xhr.responseText); }
+              catch {
+                if (xhr.status >= 500) showError(t('errServer5xx'));
+                else showError(t('errInvalidResponse'));
+                return;
+              }
+              if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                // We deliberately don't expose data.url — the user must
+                // get the link from the email they were just sent.
+                showResult(email);
+              } else {
+                showError(data.error || t('errGeneric'));
               }
             });
 
@@ -1833,6 +1875,11 @@
         errTimeout: 'Upload timed out. Please try again.',
         errInvalidResponse: 'The server returned an unexpected response. Please reload the page and try again.',
         errGeneric: 'Something went wrong while talking to the server.',
+        errMultiFile: 'Please drop just one file at a time. If your site has multiple files, pack them all into a single .zip archive first, then drop that.',
+        errFolderDrop: 'You dropped a folder — please drop a single .html or .zip file instead. Right-click the folder and choose "Compress" (macOS) or "Send to → Compressed folder" (Windows) to turn it into a .zip first.',
+        errProxy413: 'Your upload is bigger than what our reverse proxy accepts. The app limit is 50 MB but the network layer in front of it has a stricter cap. Please compress images / remove unused assets and try again.',
+        errProxyGateway: 'Our server is briefly unreachable through the proxy (502/504). This is almost always temporary — please wait a few seconds and click "Try again".',
+        errServer5xx: 'Our server hit an internal error. This is on our end, not yours. Please try again in a minute — if it keeps failing, email hello@host-my-page.com.',
         errorHelp: 'Still stuck? Email <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a> with the filename and the error text above.',
         emailTitle: 'One last step',
         emailDesc: 'Enter your email — we\'ll send both links (the live link and a private link for deleting the site later) to your inbox.',
@@ -1902,6 +1949,11 @@
         errTimeout: 'Upload-Zeit\u00fcberschreitung. Bitte erneut versuchen.',
         errInvalidResponse: 'Der Server hat eine unerwartete Antwort gesendet. Bitte lade die Seite neu und versuche es erneut.',
         errGeneric: 'Beim Kommunizieren mit dem Server ist etwas schiefgelaufen.',
+        errMultiFile: 'Bitte nur eine Datei auf einmal ablegen. Wenn deine Seite aus mehreren Dateien besteht, pack sie vorher in ein .zip-Archiv und leg das ab.',
+        errFolderDrop: 'Du hast einen Ordner abgelegt — bitte stattdessen eine einzelne .html- oder .zip-Datei. Mach den Ordner per Rechtsklick → "Komprimieren" (macOS) bzw. "Senden an → ZIP-komprimierter Ordner" (Windows) zur ZIP-Datei.',
+        errProxy413: 'Deine Datei ist größer als unser Reverse-Proxy akzeptiert. Das App-Limit liegt bei 50 MB, aber die Netzwerk-Schicht davor hat eine strengere Grenze. Bitte Bilder komprimieren / ungenutzte Assets entfernen und erneut versuchen.',
+        errProxyGateway: 'Unser Server ist kurzzeitig nicht erreichbar (502/504). Das ist fast immer vorübergehend — bitte ein paar Sekunden warten und auf "Erneut versuchen" klicken.',
+        errServer5xx: 'Unser Server hatte einen internen Fehler. Das liegt an uns, nicht an dir. Bitte in einer Minute erneut versuchen — sollte es weiter scheitern, schreib eine Mail an hello@host-my-page.com.',
         errorHelp: 'Klappt immer noch nicht? Schreib eine Mail an <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a> mit dem Dateinamen und dem Fehlertext oben.',
         emailTitle: 'Noch ein letzter Schritt',
         emailDesc: 'Gib deine E-Mail-Adresse ein \u2014 wir schicken dir beide Links per Mail: den Live-Link und einen privaten Link, mit dem du die Seite sp\u00e4ter l\u00f6schen kannst.',
@@ -2188,13 +2240,20 @@
       }
     };
 
-    let currentLang = localStorage.getItem('lang') || 'en';
+    // Safe localStorage wrapper: some browser configs (strict private mode,
+    // Safari intelligent tracking prevention, cookie-blocking extensions)
+    // throw on access. Failing to read/write should never break the upload UI.
+    const safeStorage = {
+      get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    };
+    let currentLang = safeStorage.get('lang') || 'en';
 
     function applyLanguage(lang) {
       const t = i18n[lang];
       if (!t) return;
       currentLang = lang;
-      localStorage.setItem('lang', lang);
+      safeStorage.set('lang', lang);
       document.documentElement.lang = lang;
 
       // Active button

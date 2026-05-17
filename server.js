@@ -200,6 +200,25 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+// Persistence sanity check: inside a Docker container, /app/uploads being on
+// the same device as the container's root filesystem means no volume was
+// mounted — sites would vanish on every restart. We only run this check when
+// /.dockerenv exists (i.e. inside a container) so the dev shell doesn't trip
+// it on macOS/Linux hosts.
+try {
+  if (fs.existsSync('/.dockerenv')) {
+    const uploadsDev = fs.statSync(UPLOADS_DIR).dev;
+    const rootDev = fs.statSync('/').dev;
+    if (uploadsDev && rootDev && uploadsDev === rootDev) {
+      console.warn(
+        `⚠️  Persistence warning: ${UPLOADS_DIR} is on the container's root filesystem ` +
+        `(no Docker volume mounted). All sites + analytics will be LOST on container restart. ` +
+        `Add a volume mount for /app/uploads and /app/data in your docker-compose / Kubernetes manifest.`
+      );
+    }
+  }
+} catch {}
+
 // Security & SEO headers
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -1001,15 +1020,21 @@ ${deleteUrl}
   });
 }
 
-// Generate a unique slug
+// Generate a unique slug. Pre-fix: this returned whatever the last attempt
+// produced even if it collided, so a successful upload would silently extract
+// INTO an existing site directory. With 8 hex chars (~4.3×10^9 keyspace) and
+// a typical site count well under 10^5, real-world collisions are vanishingly
+// rare, but the bug shouldn't be possible at all. Now we throw if 20 tries
+// can't find a free slug — the outer try/catch surfaces a clean 500 to the user.
 function generateSlug() {
-  let slug;
-  let attempts = 0;
-  do {
-    slug = crypto.randomBytes(4).toString('hex');
-    attempts++;
-  } while (fs.existsSync(path.join(UPLOADS_DIR, slug)) && attempts < 10);
-  return slug;
+  for (let i = 0; i < 20; i++) {
+    const slug = crypto.randomBytes(4).toString('hex');
+    if (!fs.existsSync(path.join(UPLOADS_DIR, slug))) return slug;
+  }
+  throw new Error(
+    'Could not allocate a unique slug after 20 attempts. This is extremely rare ' +
+    '— please reload and try again. If it persists, the uploads directory may need cleanup.'
+  );
 }
 
 // Health check (shows if reCAPTCHA is configured, without exposing the key)
@@ -1260,14 +1285,43 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
   const rawLang = (req.body && req.body.lang || '').trim();
   const emailLang = SUPPORTED_LANGS.includes(rawLang) ? rawLang : (req.detectedLang || DEFAULT_LANG);
 
-  const slug = generateSlug();
-  const siteDir = path.join(UPLOADS_DIR, slug);
+  // Declared with `let` so the catch block below can still see them for cleanup
+  // even if generateSlug() throws (it does, on the 1-in-a-billion all-collision case).
+  let slug, siteDir;
   const isHtml = req.file.originalname.endsWith('.html') || req.file.originalname.endsWith('.htm') || req.file.mimetype === 'text/html';
 
   try {
+    slug = generateSlug();
+    siteDir = path.join(UPLOADS_DIR, slug);
     fs.mkdirSync(siteDir, { recursive: true });
 
     if (isHtml) {
+      // Sanity: an .html file should be text. Reject if a sample contains a
+      // significant amount of NUL bytes — that almost always means a binary
+      // file was renamed to .html (e.g. a .exe or .pdf).
+      try {
+        const sampleSize = Math.min(req.file.size, 4096);
+        const fd = fs.openSync(req.file.path, 'r');
+        const sample = Buffer.alloc(sampleSize);
+        fs.readSync(fd, sample, 0, sampleSize, 0);
+        fs.closeSync(fd);
+        let nul = 0;
+        for (let i = 0; i < sample.length; i++) if (sample[i] === 0) nul++;
+        // > 1% NUL bytes in the first 4 KB is a clear signal of binary content.
+        // Real HTML files virtually never contain NULs.
+        if (sample.length > 100 && nul / sample.length > 0.01) {
+          fs.rmSync(siteDir, { recursive: true, force: true });
+          try { fs.unlinkSync(req.file.path); } catch {}
+          return res.status(400).json({
+            success: false,
+            error:
+              `"${req.file.originalname}" has a .html extension but its content looks like binary ` +
+              `data (it contains NUL bytes that valid HTML never has). This usually means a file was ` +
+              `renamed manually. Please make sure you're uploading actual HTML source code, or pack ` +
+              `binary assets into a ZIP archive.`
+          });
+        }
+      } catch {} // I/O errors fall through to the existing catch
       // Single HTML file — save as index.html (copyFile + unlink to support cross-device moves)
       fs.copyFileSync(req.file.path, path.join(siteDir, 'index.html'));
       fs.unlinkSync(req.file.path);
@@ -1305,6 +1359,21 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
         const preview = stripped.slice(0, 6).join(', ');
         const tail = stripped.length > 6 ? ` (+${stripped.length - 6} more)` : '';
         console.log(`Stripped ${stripped.length} disallowed item(s) from slug ${slug}: ${preview}${tail}`);
+      }
+
+      // Empty-after-strip detection: if the ZIP contained ONLY blocked files
+      // (e.g. a .git/ folder plus shell scripts), tell the user clearly rather
+      // than falling through to the generic "no index.html" message.
+      if (fs.readdirSync(siteDir).length === 0) {
+        fs.rmSync(siteDir, { recursive: true, force: true });
+        const removedList = stripped.slice(0, 8).join(', ');
+        return res.status(400).json({
+          success: false,
+          error:
+            `Your ZIP only contained files we don't serve on a static host. We removed: ${removedList}` +
+            `${stripped.length > 8 ? ` (+${stripped.length - 8} more)` : ''}. Nothing was left to publish. ` +
+            `Please add an "index.html" and your site's assets to the archive, then try again.`
+        });
       }
 
       // Flatten single-root-folder ZIPs
@@ -1395,21 +1464,43 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
   } catch (err) {
     console.error('Upload error:', err);
     // Clean up on failure
-    if (fs.existsSync(siteDir)) {
-      fs.rmSync(siteDir, { recursive: true, force: true });
+    if (siteDir && fs.existsSync(siteDir)) {
+      try { fs.rmSync(siteDir, { recursive: true, force: true }); } catch {}
     }
     try { fs.unlinkSync(req.file.path); } catch {}
-    // Surface enough detail for the user to either fix it or report it, while
-    // not leaking stack traces. `err.message` is set on every Error we throw
-    // (multer, AdmZip, fs); only fall back to a generic string if it's empty.
-    const detail = err && err.message ? err.message : 'unknown server error';
-    res.status(400).json({
-      success: false,
-      error:
+
+    // Map common OS-level errors to user-friendly text instead of leaking
+    // the raw "ENOSPC: no space left on device" etc.
+    let userError;
+    let status = 400;
+    if (err.code === 'ENOSPC' || err.code === 'EDQUOT') {
+      status = 507;
+      userError =
+        'Our server is temporarily out of disk space. This is on our end — please try again ' +
+        'in a few minutes. If it keeps failing, email hello@host-my-page.com.';
+    } else if (err.code === 'EACCES' || err.code === 'EPERM') {
+      status = 500;
+      userError =
+        'Our server couldn\'t write your upload to disk (permissions issue). This is on our ' +
+        'end — please email hello@host-my-page.com so we can investigate.';
+    } else if (err.message && err.message.includes('allocate a unique slug')) {
+      status = 500;
+      userError =
+        'We couldn\'t assign your site a unique URL after several tries. Please reload and ' +
+        'try again — the next attempt almost always succeeds.';
+    } else if (err.message && /invalid|corrupt|bad zip|crc/i.test(err.message)) {
+      userError =
+        `Your ZIP appears to be corrupt or truncated: ${err.message}. Try re-creating the archive ` +
+        `with a fresh "Compress" / "zip -r" command. If the original file works locally, it may ` +
+        `have been damaged during transfer.`;
+    } else {
+      const detail = err && err.message ? err.message : 'unknown server error';
+      userError =
         `Something went wrong while processing your upload: ${detail}. ` +
         `Please reload the page and try again. If this keeps happening, ` +
-        `email hello@host-my-page.com and mention the filename you tried to upload.`
-    });
+        `email hello@host-my-page.com and mention the filename you tried to upload.`;
+    }
+    res.status(status).json({ success: false, error: userError });
   }
 });
 
