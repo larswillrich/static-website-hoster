@@ -1653,6 +1653,8 @@
             const formData = new FormData();
             formData.append('site', file);
             formData.append('email', email);
+            // Tell the server which locale to render the confirmation email in.
+            formData.append('lang', currentLang);
             formData.append('website', document.getElementById('hpField').value);
             formData.append('recaptcha_token', token);
             formData.append('csrf_token', csrf.token);

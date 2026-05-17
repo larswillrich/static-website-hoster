@@ -847,29 +847,77 @@ function escapeHtml(s) {
 // with multiple URLs + a long token-shaped link. If deliverability becomes
 // an issue, the previous minimal-email + on-page delete-link approach is
 // available in git history (commit 94666e4).
-async function sendSiteCreatedEmail({ to, siteUrl, deleteUrl }) {
-  if (!mailTransporter) return { skipped: true };
-  const subject = 'Your HostMyPage link';
-  const text =
-`Hi,
+// Per-locale strings. `expiry` takes a number of days (substituted at send
+// time); URLs are interpolated at the call site so the templates stay clean.
+const EMAIL_STRINGS = {
+  en: {
+    subject: 'Your HostMyPage link',
+    greeting: 'Hi,',
+    live: 'Your site is live:',
+    expiry: n => `It expires in ${n} days.`,
+    deleteIntro: 'If you ever want to take it down, use this private delete link:',
+  },
+  de: {
+    subject: 'Dein HostMyPage-Link',
+    greeting: 'Hallo,',
+    live: 'Deine Seite ist online:',
+    expiry: n => `Sie läuft in ${n} Tagen ab.`,
+    deleteIntro: 'Wenn du sie entfernen möchtest, nutze diesen privaten Lösch-Link:',
+  },
+  es: {
+    subject: 'Tu enlace de HostMyPage',
+    greeting: 'Hola,',
+    live: 'Tu sitio está en línea:',
+    expiry: n => `Caduca en ${n} días.`,
+    deleteIntro: 'Si alguna vez quieres eliminarlo, usa este enlace privado:',
+  },
+  fr: {
+    subject: 'Votre lien HostMyPage',
+    greeting: 'Bonjour,',
+    live: 'Votre site est en ligne :',
+    expiry: n => `Il expire dans ${n} jours.`,
+    deleteIntro: 'Si vous souhaitez le supprimer, utilisez ce lien privé :',
+  },
+  ru: {
+    subject: 'Ваша ссылка HostMyPage',
+    greeting: 'Здравствуйте,',
+    live: 'Ваш сайт онлайн:',
+    expiry: n => `Срок действия истекает через ${n} дней.`,
+    deleteIntro: 'Если захотите удалить — используйте эту приватную ссылку:',
+  },
+  zh: {
+    subject: '您的 HostMyPage 链接',
+    greeting: '您好，',
+    live: '您的网站已上线：',
+    expiry: n => `将在 ${n} 天后过期。`,
+    deleteIntro: '如果您想删除网站，请使用此私密删除链接：',
+  },
+};
 
-Your site is live:
+async function sendSiteCreatedEmail({ to, siteUrl, deleteUrl, lang }) {
+  if (!mailTransporter) return { skipped: true };
+  const s = EMAIL_STRINGS[lang] || EMAIL_STRINGS[DEFAULT_LANG];
+
+  const text =
+`${s.greeting}
+
+${s.live}
 ${siteUrl}
 
-It expires in ${SITE_MAX_AGE_DAYS} days.
+${s.expiry(SITE_MAX_AGE_DAYS)}
 
-If you ever want to take it down, use this private delete link:
+${s.deleteIntro}
 ${deleteUrl}
 
 — HostMyPage`;
 
   const html =
 `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:520px;margin:0 auto;color:#1a1a1a;line-height:1.55">
-  <p>Hi,</p>
-  <p>Your site is live:</p>
+  <p>${escapeHtml(s.greeting)}</p>
+  <p>${escapeHtml(s.live)}</p>
   <p><a href="${escapeHtml(siteUrl)}">${escapeHtml(siteUrl)}</a></p>
-  <p style="color:#666;font-size:14px">It expires in ${SITE_MAX_AGE_DAYS} days.</p>
-  <p style="margin-top:20px">If you ever want to take it down, use this private delete link:</p>
+  <p style="color:#666;font-size:14px">${escapeHtml(s.expiry(SITE_MAX_AGE_DAYS))}</p>
+  <p style="margin-top:20px">${escapeHtml(s.deleteIntro)}</p>
   <p style="word-break:break-all"><a href="${escapeHtml(deleteUrl)}" style="color:#c33">${escapeHtml(deleteUrl)}</a></p>
   <p style="color:#999;font-size:13px;margin-top:24px">— HostMyPage</p>
 </div>`;
@@ -877,7 +925,7 @@ ${deleteUrl}
   return mailTransporter.sendMail({
     from: SMTP_FROM,
     to,
-    subject,
+    subject: s.subject,
     text,
     html,
   });
@@ -1102,6 +1150,11 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
     return res.status(400).json({ success: false, error: 'A valid email address is required.' });
   }
 
+  // Language for the outgoing email — must be one of the supported locales,
+  // otherwise fall back to the host-detected language (still usually 'en').
+  const rawLang = (req.body && req.body.lang || '').trim();
+  const emailLang = SUPPORTED_LANGS.includes(rawLang) ? rawLang : (req.detectedLang || DEFAULT_LANG);
+
   const slug = generateSlug();
   const siteDir = path.join(UPLOADS_DIR, slug);
   const isHtml = req.file.originalname.endsWith('.html') || req.file.originalname.endsWith('.htm') || req.file.mimetype === 'text/html';
@@ -1197,9 +1250,10 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
     });
 
     // Fire-and-forget email: both links go in the email, nothing extra is
-    // surfaced in the browser response.
-    sendSiteCreatedEmail({ to: email, siteUrl: url, deleteUrl })
-      .then(r => { if (!r.skipped) console.log(`Email sent for slug ${slug}`); })
+    // surfaced in the browser response. The email is localized to the
+    // language the user selected on the website.
+    sendSiteCreatedEmail({ to: email, siteUrl: url, deleteUrl, lang: emailLang })
+      .then(r => { if (!r.skipped) console.log(`Email sent for slug ${slug} (lang=${emailLang})`); })
       .catch(err => console.error(`Email send failed for slug ${slug}:`, err.message));
 
     res.json({ success: true, url, slug, emailSent: !!mailTransporter });
