@@ -589,27 +589,62 @@ function safeExtractZip(zipPath, destDir) {
   return { error: null };
 }
 
-// --- Strip macOS-specific cruft from extracted ZIPs ---
-// macOS Finder's "Compress" command always injects a top-level __MACOSX/
-// folder containing AppleDouble metadata, plus .DS_Store files inside any
-// directory the user has opened in Finder. Both are useless on a web host
-// but break two of our checks: __MACOSX/ adds a second top-level entry
-// (so single-folder flattening no longer fires), and .DS_Store hits the
-// dotfile guard. We delete them silently before validation runs.
-function stripMacosCruft(dirPath) {
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+// --- Silent strip of files that don't belong on a static web host ---
+// Removes (recursively): dotfiles + dotdirs (.DS_Store, .env, .git, .htaccess
+// …), macOS Finder's __MACOSX/ AppleDouble folder, and any file whose
+// extension isn't on ALLOWED_EXTENSIONS (.php, .exe, web.config, …).
+//
+// Returns a flat list of stripped relative paths so the caller can log
+// what happened. Empty directories left behind after the strip are also
+// removed so the layout-validation step sees a clean tree.
+//
+// NOTE: content-level patterns (phishing exfil, password fields, crypto
+// miners, …) are NOT handled here — those still hard-reject in the
+// content scanner, because stripping a single bad .html doesn't sanitise
+// the rest of the site that depends on it.
+function stripDisallowedFiles(dirPath, root) {
+  root = root || dirPath;
+  const stripped = [];
+  let entries;
+  try { entries = fs.readdirSync(dirPath, { withFileTypes: true }); }
+  catch { return stripped; }
+
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
+    const rel = path.relative(root, fullPath) || entry.name;
+
+    // Dotfile / dotdir → silent strip
+    if (entry.name.startsWith('.')) {
+      if (entry.isDirectory()) fs.rmSync(fullPath, { recursive: true, force: true });
+      else fs.unlinkSync(fullPath);
+      stripped.push(rel + (entry.isDirectory() ? '/' : ''));
+      continue;
+    }
+
+    // macOS Finder cruft folder
+    if (entry.isDirectory() && entry.name === '__MACOSX') {
+      fs.rmSync(fullPath, { recursive: true, force: true });
+      stripped.push(rel + '/');
+      continue;
+    }
+
     if (entry.isDirectory()) {
-      if (entry.name === '__MACOSX') {
-        fs.rmSync(fullPath, { recursive: true, force: true });
-      } else {
-        stripMacosCruft(fullPath);
-      }
-    } else if (entry.name === '.DS_Store') {
+      stripped.push(...stripDisallowedFiles(fullPath, root));
+      // Drop directory if it ended up empty
+      try {
+        if (fs.readdirSync(fullPath).length === 0) fs.rmdirSync(fullPath);
+      } catch {}
+      continue;
+    }
+
+    // File with non-allowlisted extension → silent strip
+    const ext = path.extname(entry.name).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
       fs.unlinkSync(fullPath);
+      stripped.push(rel);
     }
   }
+  return stripped;
 }
 
 // --- Auto-expiry: clean up sites older than SITE_MAX_AGE_DAYS ---
@@ -661,26 +696,9 @@ const ALLOWED_EXTENSIONS = new Set([
   '.lipsync', '.vtsres',
 ]);
 
-function checkFileExtensions(dirPath) {
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  for (const entry of entries) {
-    // Reject dotfiles: .env / .htaccess / .htpasswd / .git / etc. leak secrets or override server behavior.
-    if (entry.name.startsWith('.')) {
-      return `Dotfiles are not allowed: ${entry.name}`;
-    }
-    const fullPath = path.join(dirPath, entry.name);
-    if (entry.isDirectory()) {
-      const result = checkFileExtensions(fullPath);
-      if (result) return result;
-    } else {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (!ALLOWED_EXTENSIONS.has(ext)) {
-        return `File type not allowed: ${ext || '(no extension)'} (${entry.name})`;
-      }
-    }
-  }
-  return null;
-}
+// `checkFileExtensions` was removed: the extension/dotfile guard is now
+// handled by stripDisallowedFiles() which silently removes the offending
+// entries instead of failing the whole upload. See its docstring above.
 
 // --- Upload content scanner (detect phishing, credential harvesting, etc.) ---
 // Patterns with `jsOnly: true` are only matched against .js / .mjs files (avoids
@@ -773,9 +791,9 @@ function scanFileContent(content, ext) {
 }
 
 function scanDirectory(dirPath) {
-  // Enforce extension allowlist first (also rejects dotfiles like .env / .htaccess)
-  const extResult = checkFileExtensions(dirPath);
-  if (extResult) return extResult;
+  // Note: disallowed extensions and dotfiles are already stripped before
+  // this function is called (see stripDisallowedFiles in the upload
+  // handler). This pass only catches content-level issues.
 
   // Check content hash against previously flagged uploads
   const contentHash = hashDirectoryContent(dirPath);
@@ -1215,8 +1233,16 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
         });
       }
 
-      // Drop macOS Finder cruft (__MACOSX/, .DS_Store) before validating layout
-      stripMacosCruft(siteDir);
+      // Silently drop anything that doesn't belong on a static web host
+      // (dotfiles, macOS Finder cruft, files with non-allowlisted extensions
+      // like .htaccess / web.config / .php / .exe …) so a user-friendly
+      // upload still succeeds for the rest of the site.
+      const stripped = stripDisallowedFiles(siteDir);
+      if (stripped.length > 0) {
+        const preview = stripped.slice(0, 6).join(', ');
+        const tail = stripped.length > 6 ? ` (+${stripped.length - 6} more)` : '';
+        console.log(`Stripped ${stripped.length} disallowed item(s) from slug ${slug}: ${preview}${tail}`);
+      }
 
       // Flatten single-root-folder ZIPs
       const entries = fs.readdirSync(siteDir);
