@@ -589,6 +589,29 @@ function safeExtractZip(zipPath, destDir) {
   return { error: null };
 }
 
+// --- Strip macOS-specific cruft from extracted ZIPs ---
+// macOS Finder's "Compress" command always injects a top-level __MACOSX/
+// folder containing AppleDouble metadata, plus .DS_Store files inside any
+// directory the user has opened in Finder. Both are useless on a web host
+// but break two of our checks: __MACOSX/ adds a second top-level entry
+// (so single-folder flattening no longer fires), and .DS_Store hits the
+// dotfile guard. We delete them silently before validation runs.
+function stripMacosCruft(dirPath) {
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '__MACOSX') {
+        fs.rmSync(fullPath, { recursive: true, force: true });
+      } else {
+        stripMacosCruft(fullPath);
+      }
+    } else if (entry.name === '.DS_Store') {
+      fs.unlinkSync(fullPath);
+    }
+  }
+}
+
 // --- Auto-expiry: clean up sites older than SITE_MAX_AGE_DAYS ---
 function cleanExpiredSites() {
   if (!fs.existsSync(UPLOADS_DIR)) return;
@@ -1191,6 +1214,9 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
           error: extractResult.error
         });
       }
+
+      // Drop macOS Finder cruft (__MACOSX/, .DS_Store) before validating layout
+      stripMacosCruft(siteDir);
 
       // Flatten single-root-folder ZIPs
       const entries = fs.readdirSync(siteDir);
