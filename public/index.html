@@ -767,9 +767,26 @@
     .error-message {
       font-size: 13px;
       color: var(--text-dim);
-      margin-bottom: 20px;
+      margin: 0 auto 16px;
+      line-height: 1.55;
+      max-width: 440px;
+      text-align: left;
+      white-space: pre-line;
+      word-break: break-word;
+    }
+
+    .error-help {
+      font-size: 11.5px;
+      color: var(--text-muted, #777);
+      margin: 0 auto 16px;
+      max-width: 380px;
       line-height: 1.5;
     }
+    .error-help a {
+      color: var(--accent, #e8793a);
+      text-decoration: none;
+    }
+    .error-help a:hover { text-decoration: underline; }
 
     /* Upload hint footer */
     .upload-hint {
@@ -1297,6 +1314,7 @@
           </div>
           <p class="error-title">Upload failed</p>
           <p class="error-message" id="errorMessage"></p>
+          <p class="error-help" id="errorHelp">Still stuck? Email <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a> with the filename and the error text above.</p>
           <button class="new-upload-btn" id="retryBtn">Try again</button>
         </div>
       </div>
@@ -1813,8 +1831,9 @@
         errTokenFailed: 'Could not verify security token. Please reload and try again.',
         errNetwork: 'Network error. Please try again.',
         errTimeout: 'Upload timed out. Please try again.',
-        errInvalidResponse: 'Invalid response from server.',
-        errGeneric: 'Something went wrong.',
+        errInvalidResponse: 'The server returned an unexpected response. Please reload the page and try again.',
+        errGeneric: 'Something went wrong while talking to the server.',
+        errorHelp: 'Still stuck? Email <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a> with the filename and the error text above.',
         emailTitle: 'One last step',
         emailDesc: 'Enter your email — we\'ll send both links (the live link and a private link for deleting the site later) to your inbox.',
         emailPlaceholder: 'you@example.com',
@@ -1881,8 +1900,9 @@
         errTokenFailed: 'Sicherheitstoken konnte nicht verifiziert werden. Bitte Seite neu laden.',
         errNetwork: 'Netzwerkfehler. Bitte erneut versuchen.',
         errTimeout: 'Upload-Zeit\u00fcberschreitung. Bitte erneut versuchen.',
-        errInvalidResponse: 'Ung\u00fcltige Antwort vom Server.',
-        errGeneric: 'Etwas ist schiefgelaufen.',
+        errInvalidResponse: 'Der Server hat eine unerwartete Antwort gesendet. Bitte lade die Seite neu und versuche es erneut.',
+        errGeneric: 'Beim Kommunizieren mit dem Server ist etwas schiefgelaufen.',
+        errorHelp: 'Klappt immer noch nicht? Schreib eine Mail an <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a> mit dem Dateinamen und dem Fehlertext oben.',
         emailTitle: 'Noch ein letzter Schritt',
         emailDesc: 'Gib deine E-Mail-Adresse ein \u2014 wir schicken dir beide Links per Mail: den Live-Link und einen privaten Link, mit dem du die Seite sp\u00e4ter l\u00f6schen kannst.',
         emailPlaceholder: 'du@beispiel.de',
@@ -1948,8 +1968,9 @@
         errTokenFailed: 'No se pudo verificar el token. Recarga la p\u00e1gina.',
         errNetwork: 'Error de red. Int\u00e9ntalo de nuevo.',
         errTimeout: 'Tiempo agotado. Int\u00e9ntalo de nuevo.',
-        errInvalidResponse: 'Respuesta inv\u00e1lida del servidor.',
-        errGeneric: 'Algo sali\u00f3 mal.',
+        errInvalidResponse: 'El servidor envi\u00f3 una respuesta inesperada. Recarga la p\u00e1gina e int\u00e9ntalo de nuevo.',
+        errGeneric: 'Algo sali\u00f3 mal al comunicarse con el servidor.',
+        errorHelp: '\u00bfSigues atascado? Env\u00eda un email a <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a> con el nombre del archivo y el texto del error de arriba.',
         emailTitle: 'Un \u00faltimo paso',
         emailDesc: 'Introduce tu correo — te enviaremos ambos enlaces por email: el enlace en vivo y un enlace privado para eliminar el sitio más tarde.',
         emailPlaceholder: 'tu@ejemplo.com',
@@ -2016,8 +2037,9 @@
         errTokenFailed: 'Impossible de v\u00e9rifier le jeton. Rechargez la page.',
         errNetwork: 'Erreur r\u00e9seau. R\u00e9essayez.',
         errTimeout: 'D\u00e9lai d\u2019envoi d\u00e9pass\u00e9. R\u00e9essayez.',
-        errInvalidResponse: 'R\u00e9ponse invalide du serveur.',
-        errGeneric: 'Quelque chose s\u2019est mal pass\u00e9.',
+        errInvalidResponse: 'Le serveur a renvoy\u00e9 une r\u00e9ponse inattendue. Rechargez la page et r\u00e9essayez.',
+        errGeneric: 'Quelque chose s\u2019est mal pass\u00e9 lors de la communication avec le serveur.',
+        errorHelp: 'Toujours bloqu\u00e9 ? Envoyez un e-mail \u00e0 <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a> avec le nom du fichier et le texte d\u2019erreur ci-dessus.',
         emailTitle: 'Une derni\u00e8re \u00e9tape',
         emailDesc: 'Saisissez votre e-mail \u2014 nous vous enverrons les deux liens par e-mail : le lien en ligne et un lien priv\u00e9 pour supprimer le site plus tard.',
         emailPlaceholder: 'vous@exemple.com',
@@ -2084,8 +2106,9 @@
         errTokenFailed: '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0442\u043e\u043a\u0435\u043d. \u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0443.',
         errNetwork: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0441\u0435\u0442\u0438. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0441\u043d\u043e\u0432\u0430.',
         errTimeout: '\u0412\u0440\u0435\u043c\u044f \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u0438\u0441\u0442\u0435\u043a\u043b\u043e. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0441\u043d\u043e\u0432\u0430.',
-        errInvalidResponse: '\u041d\u0435\u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\u044b\u0439 \u043e\u0442\u0432\u0435\u0442 \u043e\u0442 \u0441\u0435\u0440\u0432\u0435\u0440\u0430.',
-        errGeneric: '\u0427\u0442\u043e-\u0442\u043e \u043f\u043e\u0448\u043b\u043e \u043d\u0435 \u0442\u0430\u043a.',
+        errInvalidResponse: '\u0421\u0435\u0440\u0432\u0435\u0440 \u0432\u0435\u0440\u043d\u0443\u043b \u043d\u0435\u043e\u0436\u0438\u0434\u0430\u043d\u043d\u044b\u0439 \u043e\u0442\u0432\u0435\u0442. \u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u0443 \u0438 \u043f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0441\u043d\u043e\u0432\u0430.',
+        errGeneric: '\u0427\u0442\u043e-\u0442\u043e \u043f\u043e\u0448\u043b\u043e \u043d\u0435 \u0442\u0430\u043a \u043f\u0440\u0438 \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u0438 \u043a \u0441\u0435\u0440\u0432\u0435\u0440\u0443.',
+        errorHelp: '\u0412\u0441\u0451 \u0435\u0449\u0451 \u043d\u0435 \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442? \u041d\u0430\u043f\u0438\u0448\u0438\u0442\u0435 \u043d\u0430 <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a> \u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0438\u0442\u0435 \u0438\u043c\u044f \u0444\u0430\u0439\u043b\u0430 \u0438 \u0442\u0435\u043a\u0441\u0442 \u043e\u0448\u0438\u0431\u043a\u0438 \u0441\u0432\u0435\u0440\u0445\u0443.',
         emailTitle: '\u0415\u0449\u0451 \u043e\u0434\u0438\u043d \u0448\u0430\u0433',
         emailDesc: '\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u0432\u0430\u0448 email \u2014 \u043c\u044b \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u043c \u043e\u0431\u0435 \u0441\u0441\u044b\u043b\u043a\u0438 \u043f\u043e \u043f\u043e\u0447\u0442\u0435: \u0441\u0441\u044b\u043b\u043a\u0443 \u043d\u0430 \u0441\u0430\u0439\u0442 \u0438 \u043f\u0440\u0438\u0432\u0430\u0442\u043d\u0443\u044e \u0441\u0441\u044b\u043b\u043a\u0443, \u0447\u0442\u043e\u0431\u044b \u0432\u044b \u043c\u043e\u0433\u043b\u0438 \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0441\u0430\u0439\u0442 \u043f\u043e\u0437\u0436\u0435.',
         emailPlaceholder: '\u0432\u044b@\u043f\u0440\u0438\u043c\u0435\u0440.com',
@@ -2152,8 +2175,9 @@
         errTokenFailed: '\u65e0\u6cd5\u9a8c\u8bc1\u5b89\u5168\u4ee4\u724c\u3002\u8bf7\u91cd\u65b0\u52a0\u8f7d\u3002',
         errNetwork: '\u7f51\u7edc\u9519\u8bef\u3002\u8bf7\u91cd\u8bd5\u3002',
         errTimeout: '\u4e0a\u4f20\u8d85\u65f6\u3002\u8bf7\u91cd\u8bd5\u3002',
-        errInvalidResponse: '\u670d\u52a1\u5668\u54cd\u5e94\u65e0\u6548\u3002',
-        errGeneric: '\u51fa\u73b0\u9519\u8bef\u3002',
+        errInvalidResponse: '\u670d\u52a1\u5668\u8fd4\u56de\u4e86\u610f\u5916\u7684\u54cd\u5e94\u3002\u8bf7\u91cd\u65b0\u52a0\u8f7d\u9875\u9762\u5e76\u91cd\u8bd5\u3002',
+        errGeneric: '\u4e0e\u670d\u52a1\u5668\u901a\u4fe1\u65f6\u51fa\u73b0\u9519\u8bef\u3002',
+        errorHelp: '\u4ecd\u7136\u65e0\u6cd5\u89e3\u51b3\uff1f\u8bf7\u53d1\u90ae\u4ef6\u81f3 <a href="mailto:hello@host-my-page.com">hello@host-my-page.com</a>\uff0c\u9644\u4e0a\u6587\u4ef6\u540d\u548c\u4e0a\u65b9\u7684\u9519\u8bef\u4fe1\u606f\u3002',
         emailTitle: '\u6700\u540e\u4e00\u6b65',
         emailDesc: '\u8f93\u5165\u60a8\u7684\u90ae\u7bb1 \u2014 \u6211\u4eec\u4f1a\u901a\u8fc7\u90ae\u4ef6\u5c06\u4e24\u4e2a\u94fe\u63a5\u53d1\u9001\u7ed9\u60a8\uff1a\u7f51\u7ad9\u94fe\u63a5\u548c\u7a0d\u540e\u7528\u4e8e\u5220\u9664\u7f51\u7ad9\u7684\u79c1\u5bc6\u94fe\u63a5\u3002',
         emailPlaceholder: '\u4f60@example.com',
@@ -2201,6 +2225,8 @@
       // Error state
       document.querySelector('.error-title').textContent = t.uploadFailed;
       retryBtn.textContent = t.tryAgain;
+      const helpEl = document.getElementById('errorHelp');
+      if (helpEl) helpEl.innerHTML = t.errorHelp || i18n.en.errorHelp;
 
       // Upload hint
       document.querySelector('.upload-hint').innerHTML = t.uploadHint;

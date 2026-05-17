@@ -515,7 +515,11 @@ const upload = multer({
     if (isZip || isHtml) {
       cb(null, true);
     } else {
-      cb(new Error('Only HTML and ZIP files are allowed'));
+      cb(new Error(
+        `We only accept .html or .zip files at upload. You sent "${file.originalname}". ` +
+        `If your site has more than one file (HTML + CSS + JS + images), pack everything ` +
+        `into a single .zip archive and try again.`
+      ));
     }
   }
 });
@@ -547,7 +551,12 @@ function safeExtractZip(zipPath, destDir) {
 
   // ZIP bomb check: total file count
   if (zipEntries.length > MAX_ZIP_FILES) {
-    return { error: `ZIP contains too many files (${zipEntries.length}, max ${MAX_ZIP_FILES}).` };
+    return {
+      error:
+        `Your ZIP contains ${zipEntries.length} files, but we only accept up to ${MAX_ZIP_FILES} per upload. ` +
+        `Remove files you don't need for the live site (e.g. source assets, development folders, node_modules) ` +
+        `and try again.`
+    };
   }
 
   // ZIP bomb check: total uncompressed size
@@ -555,7 +564,13 @@ function safeExtractZip(zipPath, destDir) {
   for (const entry of zipEntries) {
     totalSize += entry.header.size;
     if (totalSize > MAX_EXTRACTED_SIZE) {
-      return { error: `ZIP extracted size exceeds ${MAX_EXTRACTED_SIZE / 1024 / 1024} MB limit.` };
+      const limitMB = MAX_EXTRACTED_SIZE / 1024 / 1024;
+      return {
+        error:
+          `Your ZIP unpacks to more than ${limitMB} MB. We cap the extracted size to keep the platform free ` +
+          `and abuse-resistant. Try optimizing large images (e.g. with TinyPNG or Squoosh), removing unused ` +
+          `assets, or splitting your site into smaller deployments.`
+      };
     }
   }
 
@@ -565,7 +580,12 @@ function safeExtractZip(zipPath, destDir) {
 
     // Zip Slip: ensure resolved path is within destination
     if (!resolvedEntry.startsWith(resolvedDest + path.sep) && resolvedEntry !== resolvedDest) {
-      return { error: 'ZIP contains path traversal entries.' };
+      return {
+        error:
+          `Your ZIP contains an entry with a path that escapes the archive root (e.g. uses "../" or an ` +
+          `absolute path). This is blocked to prevent overwriting files outside your site folder. ` +
+          `Re-create the ZIP from a clean folder — most archivers do this correctly by default.`
+      };
     }
 
     // Symlink protection: extract UNIX file-type bits from external attr and
@@ -575,7 +595,12 @@ function safeExtractZip(zipPath, destDir) {
     const unixMode = (entry.header.attr >>> 16) & 0xFFFF;
     const S_IFMT = 0xF000, S_IFLNK = 0xA000;
     if ((unixMode & S_IFMT) === S_IFLNK) {
-      return { error: 'ZIP contains symbolic links.' };
+      return {
+        error:
+          `Your ZIP contains a symbolic link ("${entry.entryName}"). Symlinks are blocked because they ` +
+          `can point to files outside your site. On macOS/Linux, recreate the archive with ` +
+          `"zip -r site.zip ." (without "--symlinks") or use Finder's Compress.`
+      };
     }
 
     if (entry.isDirectory) {
@@ -1136,7 +1161,13 @@ const uploadLimiter = rateLimit({
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
   keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip,
   handler: (req, res) => {
-    res.status(429).json({ success: false, error: 'Too many uploads. Please try again later.' });
+    res.status(429).json({
+      success: false,
+      error:
+        'You\'ve uploaded 5 sites in the last 15 minutes — that\'s our rate limit per IP address. ' +
+        'This keeps the service free for everyone by blocking automated abuse. ' +
+        'Please wait a few minutes and try again.'
+    });
   }
 });
 
@@ -1161,30 +1192,53 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
   // CSRF token verification
   const csrfToken = req.body && req.body.csrf_token;
   if (!csrfToken || !csrfTokens.has(csrfToken)) {
-    return res.status(403).json({ success: false, error: 'Invalid or missing security token. Please reload and try again.' });
+    return res.status(403).json({
+      success: false,
+      error:
+        'Your security token expired or wasn\'t recognised (tokens are valid for 10 minutes). ' +
+        'Please reload the page and try the upload again.'
+    });
   }
   csrfTokens.delete(csrfToken); // Single-use token
 
-  // Honeypot check: bots fill hidden fields, real users don't
+  // Honeypot check: bots fill hidden fields, real users don't. Message kept
+  // deliberately generic so bots can't fingerprint the trap.
   if (req.body && req.body.website) {
-    return res.status(400).json({ success: false, error: 'Failed to process uploaded file.' });
+    return res.status(400).json({ success: false, error: 'Upload could not be processed. Please reload the page and try again.' });
   }
 
   // reCAPTCHA v3 verification
   const recaptchaToken = req.body && req.body.recaptcha_token;
   if (RECAPTCHA_SECRET_KEY && !recaptchaToken) {
-    return res.status(400).json({ success: false, error: 'Security verification missing. Please reload and try again.' });
+    return res.status(400).json({
+      success: false,
+      error:
+        'The Google reCAPTCHA token is missing. This usually means the page lost its connection to Google\'s ' +
+        'reCAPTCHA service. Please reload the page and try again. If you\'re using an ad-blocker or strict ' +
+        'tracking-protection, allow www.google.com / www.gstatic.com for this site.'
+    });
   }
   if (RECAPTCHA_SECRET_KEY) {
     const captchaResult = await verifyRecaptcha(recaptchaToken);
     if (!captchaResult.success || captchaResult.score < 0.5) {
       console.log(`reCAPTCHA rejected: success=${captchaResult.success}, score=${captchaResult.score}`);
-      return res.status(403).json({ success: false, error: 'Security verification failed. Please try again.' });
+      return res.status(403).json({
+        success: false,
+        error:
+          `Google reCAPTCHA scored your request as likely automated (score ${captchaResult.score ?? 'n/a'} ` +
+          `out of 1.0; we require ≥ 0.5). Please reload the page and try once more. If it keeps failing, ` +
+          `try a different network or browser, and disable VPN/Tor if you're using one.`
+      });
     }
   }
 
   if (!req.file) {
-    return res.status(400).json({ success: false, error: 'No file uploaded.' });
+    return res.status(400).json({
+      success: false,
+      error:
+        'No file was attached to the upload. Please drag a .html or .zip file onto the upload area, or ' +
+        'click "Browse" to pick one from your computer.'
+    });
   }
 
   // Email is required: users get the public link + delete link via email,
@@ -1192,7 +1246,13 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
   const email = (req.body && req.body.email || '').trim();
   if (!isValidEmail(email)) {
     try { fs.unlinkSync(req.file.path); } catch {}
-    return res.status(400).json({ success: false, error: 'A valid email address is required.' });
+    return res.status(400).json({
+      success: false,
+      error:
+        email
+          ? `"${email}" doesn\'t look like a valid email address. Please enter something in the form "you@example.com".`
+          : 'Please enter your email address. We need it to send you the live link and a private delete link.'
+    });
   }
 
   // Language for the outgoing email — must be one of the supported locales,
@@ -1218,7 +1278,10 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
         try { fs.unlinkSync(req.file.path); } catch {}
         return res.status(400).json({
           success: false,
-          error: 'Invalid ZIP file.'
+          error:
+            `"${req.file.originalname}" has a .zip extension but isn't actually a ZIP archive (the file ` +
+            `signature doesn't match). This usually happens when a file was renamed manually. Please ` +
+            `re-create the ZIP using your operating system's "Compress" command or a tool like 7-Zip / WinRAR.`
         });
       }
 
@@ -1259,10 +1322,21 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
 
       // Verify index.html exists in ZIP
       if (!fs.existsSync(path.join(siteDir, 'index.html'))) {
+        // Best-effort: tell the user what we DID find so they can compare
+        let topLevel = [];
+        try { topLevel = fs.readdirSync(siteDir).slice(0, 8); } catch {}
+        const what = topLevel.length
+          ? `Top-level entries we found: ${topLevel.map(e => `"${e}"`).join(', ')}${topLevel.length === 8 ? ', …' : ''}.`
+          : 'After cleaning up macOS / config-file cruft, the archive was empty.';
+
         fs.rmSync(siteDir, { recursive: true, force: true });
         return res.status(400).json({
           success: false,
-          error: 'Your ZIP must contain an index.html at the root level.'
+          error:
+            `We couldn\'t find an "index.html" at the top level of your ZIP. ${what} ` +
+            `Make sure your homepage file is named exactly "index.html" (lowercase) and that it sits at ` +
+            `the root of the archive — not inside a subfolder. If your build tool emits a different name ` +
+            `(e.g. "main.html"), rename it before zipping.`
         });
       }
 
@@ -1277,7 +1351,12 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
       fs.rmSync(siteDir, { recursive: true, force: true });
       return res.status(400).json({
         success: false,
-        error: 'Upload rejected: suspicious content detected. If you believe this is a mistake, please contact support.'
+        error:
+          `We detected something that's not allowed on this platform: ${scanResult}. ` +
+          `This rule exists because the same patterns are used by phishing / credential-harvesting kits, ` +
+          `crypto miners, or browser-exploit pages. If your site genuinely needs to do this ` +
+          `(e.g. you are building a login mockup for a portfolio), please reach out to ` +
+          `hello@host-my-page.com — otherwise remove the flagged code and re-upload.`
       });
     }
 
@@ -1320,7 +1399,17 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
       fs.rmSync(siteDir, { recursive: true, force: true });
     }
     try { fs.unlinkSync(req.file.path); } catch {}
-    res.status(400).json({ success: false, error: 'Failed to process uploaded file.' });
+    // Surface enough detail for the user to either fix it or report it, while
+    // not leaking stack traces. `err.message` is set on every Error we throw
+    // (multer, AdmZip, fs); only fall back to a generic string if it's empty.
+    const detail = err && err.message ? err.message : 'unknown server error';
+    res.status(400).json({
+      success: false,
+      error:
+        `Something went wrong while processing your upload: ${detail}. ` +
+        `Please reload the page and try again. If this keeps happening, ` +
+        `email hello@host-my-page.com and mention the filename you tried to upload.`
+    });
   }
 });
 
@@ -1529,11 +1618,29 @@ app.get(`${BASE_PATH}/api/analytics`, requireAdmin, (req, res) => {
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ success: false, error: 'File too large. Maximum size is 50 MB.' });
+      const limitMB = MAX_FILE_SIZE / 1024 / 1024;
+      return res.status(400).json({
+        success: false,
+        error:
+          `Your upload is larger than the ${limitMB} MB per-file limit. Try compressing large images ` +
+          `(JPEG/WebP at 80% quality is usually plenty for the web), removing unused video/audio files, ` +
+          `or splitting your site into smaller deployments.`
+      });
     }
-    return res.status(400).json({ success: false, error: err.message });
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({
+        success: false,
+        error: 'The upload form expected a single file in the "site" field. Please reload the page and try again.'
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      error: `Upload failed (multer ${err.code}): ${err.message}. Please reload the page and try again.`
+    });
   }
   if (err) {
+    // err.message comes from our own fileFilter / extraction / scan paths and
+    // is already user-friendly; pass it through verbatim.
     return res.status(400).json({ success: false, error: err.message });
   }
   next();
