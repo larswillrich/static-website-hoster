@@ -1252,7 +1252,7 @@
             </svg>
           </div>
           <p class="password-title" id="passwordTitle">Almost there</p>
-          <p class="password-subtitle" id="passwordSubtitle">Enter the password to reveal your link</p>
+          <p class="password-subtitle" id="passwordSubtitle">Enter the password to upload your site</p>
           <form class="password-form" id="passwordForm" autocomplete="off" novalidate>
             <input type="password" class="password-input" id="passwordInput" placeholder="Password" autocomplete="new-password" spellcheck="false">
             <button type="submit" class="password-submit" id="passwordSubmit">Unlock</button>
@@ -1539,7 +1539,7 @@
     const newUploadBtn = document.getElementById('newUploadBtn');
     const retryBtn = document.getElementById('retryBtn');
 
-    let pendingUrl = '';
+    let pendingFile = null;
 
     function showState(state) {
       dropZone.style.display = state === 'idle' ? '' : 'none';
@@ -1553,7 +1553,7 @@
       showState('idle');
       fileInput.value = '';
       progressBar.style.width = '0%';
-      pendingUrl = '';
+      pendingFile = null;
       passwordInput.value = '';
       passwordInput.classList.remove('error', 'shake');
       passwordError.innerHTML = '&nbsp;';
@@ -1600,7 +1600,11 @@
         showError(t('errFileType'));
         return;
       }
+      pendingFile = file;
+      promptForPassword();
+    }
 
+    function startUpload(file) {
       uploadFileName.textContent = file.name;
       showState('uploading');
 
@@ -1627,7 +1631,7 @@
               try {
                 const data = JSON.parse(xhr.responseText);
                 if (xhr.status >= 200 && xhr.status < 300 && data.success) {
-                  promptForPassword(data.url);
+                  showResult(data.url);
                 } else {
                   showError(data.error || t('errGeneric'));
                 }
@@ -1651,8 +1655,7 @@
       });
     }
 
-    function promptForPassword(url) {
-      pendingUrl = url;
+    function promptForPassword() {
       passwordInput.value = '';
       passwordInput.classList.remove('error', 'shake');
       passwordError.innerHTML = '&nbsp;';
@@ -1674,7 +1677,9 @@
     passwordForm.addEventListener('submit', e => {
       e.preventDefault();
       if (passwordInput.value === SITE_PASSWORD) {
-        showResult(pendingUrl);
+        const file = pendingFile;
+        pendingFile = null;
+        if (file) startUpload(file);
       } else {
         passwordInput.classList.add('error', 'shake');
         passwordError.textContent = t('passwordError');
@@ -1770,7 +1775,7 @@
         resultSubtitle: 'Anyone with the link can view it',
         uploadAnother: 'Upload another',
         passwordTitle: 'Almost there',
-        passwordSubtitle: 'Enter the password to reveal your link',
+        passwordSubtitle: 'Enter the password to upload your site',
         passwordPlaceholder: 'Password',
         passwordSubmit: 'Unlock',
         passwordError: 'Incorrect password',
@@ -1834,7 +1839,7 @@
         resultSubtitle: 'Jeder mit dem Link kann sie ansehen',
         uploadAnother: 'Weitere hochladen',
         passwordTitle: 'Fast geschafft',
-        passwordSubtitle: 'Gib das Passwort ein, um deinen Link anzuzeigen',
+        passwordSubtitle: 'Gib das Passwort ein, um deine Seite hochzuladen',
         passwordPlaceholder: 'Passwort',
         passwordSubmit: 'Entsperren',
         passwordError: 'Falsches Passwort',
@@ -1898,7 +1903,7 @@
         resultSubtitle: 'Cualquiera con el enlace puede verlo',
         uploadAnother: 'Subir otro',
         passwordTitle: 'Casi listo',
-        passwordSubtitle: 'Introduce la contraseña para ver tu enlace',
+        passwordSubtitle: 'Introduce la contraseña para subir tu sitio',
         passwordPlaceholder: 'Contraseña',
         passwordSubmit: 'Desbloquear',
         passwordError: 'Contraseña incorrecta',
@@ -1962,7 +1967,7 @@
         resultSubtitle: 'Toute personne avec le lien peut le voir',
         uploadAnother: 'Envoyer un autre',
         passwordTitle: 'Presque fini',
-        passwordSubtitle: 'Entrez le mot de passe pour afficher votre lien',
+        passwordSubtitle: 'Entrez le mot de passe pour téléverser votre site',
         passwordPlaceholder: 'Mot de passe',
         passwordSubmit: 'D\u00e9verrouiller',
         passwordError: 'Mot de passe incorrect',
@@ -2026,7 +2031,7 @@
         resultSubtitle: '\u041b\u044e\u0431\u043e\u0439, \u0443 \u043a\u043e\u0433\u043e \u0435\u0441\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0430, \u043c\u043e\u0436\u0435\u0442 \u0435\u0433\u043e \u0443\u0432\u0438\u0434\u0435\u0442\u044c',
         uploadAnother: '\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0435\u0449\u0451',
         passwordTitle: '\u041f\u043e\u0447\u0442\u0438 \u0433\u043e\u0442\u043e\u0432\u043e',
-        passwordSubtitle: '\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043f\u0430\u0440\u043e\u043b\u044c, \u0447\u0442\u043e\u0431\u044b \u0443\u0432\u0438\u0434\u0435\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0443',
+        passwordSubtitle: '\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043f\u0430\u0440\u043e\u043b\u044c, \u0447\u0442\u043e\u0431\u044b \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u0430\u0439\u0442',
         passwordPlaceholder: '\u041f\u0430\u0440\u043e\u043b\u044c',
         passwordSubmit: '\u0420\u0430\u0437\u0431\u043b\u043e\u043a\u0438\u0440\u043e\u0432\u0430\u0442\u044c',
         passwordError: '\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043f\u0430\u0440\u043e\u043b\u044c',
@@ -2090,7 +2095,7 @@
         resultSubtitle: '\u4efb\u4f55\u4eba\u90fd\u53ef\u4ee5\u901a\u8fc7\u94fe\u63a5\u8bbf\u95ee',
         uploadAnother: '\u4e0a\u4f20\u53e6\u4e00\u4e2a',
         passwordTitle: '\u5373\u5c06\u5b8c\u6210',
-        passwordSubtitle: '\u8f93\u5165\u5bc6\u7801\u4ee5\u663e\u793a\u60a8\u7684\u94fe\u63a5',
+        passwordSubtitle: '\u8f93\u5165\u5bc6\u7801\u4ee5\u4e0a\u4f20\u60a8\u7684\u7f51\u7ad9',
         passwordPlaceholder: '\u5bc6\u7801',
         passwordSubmit: '\u89e3\u9501',
         passwordError: '\u5bc6\u7801\u9519\u8bef',
