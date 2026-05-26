@@ -757,6 +757,26 @@
       color: var(--text-dim);
     }
 
+    .access-hint {
+      text-align: center;
+      margin-top: 10px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      animation: fadeUp 0.6s ease-out 0.3s both;
+    }
+
+    .access-hint a {
+      color: var(--text-dim);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--text-muted);
+      transition: color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .access-hint a:hover {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
     /* Content sections below the fold */
     .content {
       width: 100%;
@@ -1285,6 +1305,7 @@
         <input type="text" name="website" id="hpField" tabindex="-1" autocomplete="off" value="">
       </div>
       <p class="upload-hint"><span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span></p>
+      <p class="access-hint" id="accessHint">Want access? Drop me a line via the <a href="./imprint">email in the imprint</a>.</p>
     </div>
   </main>
 
@@ -1756,6 +1777,7 @@
         uploadFailed: 'Upload failed',
         tryAgain: 'Try again',
         uploadHint: '<span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span>',
+        accessHint: 'Want access? Drop me a line via the <a href="./imprint">email in the imprint</a>.',
         howItWorks: 'How It Works',
         step1Title: 'Drop your file', step1Desc: 'Drag and drop an HTML file or ZIP archive onto the upload area above.',
         step2Title: 'Get your link', step2Desc: 'Your website is instantly deployed and you receive a unique shareable URL.',
@@ -1819,6 +1841,7 @@
         uploadFailed: 'Upload fehlgeschlagen',
         tryAgain: 'Erneut versuchen',
         uploadHint: '<span>.html</span> oder <span>.zip</span> &middot; Max. <span>50 MB</span>',
+        accessHint: 'Zugang gew\u00fcnscht? Schreib mir \u2013 <a href="./imprint">E-Mail im Impressum</a>.',
         howItWorks: 'So funktioniert\u2019s',
         step1Title: 'Datei ablegen', step1Desc: 'Ziehe eine HTML-Datei oder ein ZIP-Archiv auf den Upload-Bereich.',
         step2Title: 'Link erhalten', step2Desc: 'Deine Website wird sofort bereitgestellt und du erh\u00e4ltst eine eindeutige URL.',
@@ -1882,6 +1905,7 @@
         uploadFailed: 'Error al subir',
         tryAgain: 'Intentar de nuevo',
         uploadHint: '<span>.html</span> o <span>.zip</span> &middot; M\u00e1x. <span>50 MB</span>',
+        accessHint: '\u00bfNecesitas acceso? Escr\u00edbeme \u2014 <a href="./imprint">correo en el aviso legal</a>.',
         howItWorks: 'C\u00f3mo Funciona',
         step1Title: 'Suelta tu archivo', step1Desc: 'Arrastra y suelta un archivo HTML o ZIP en el \u00e1rea de carga.',
         step2Title: 'Obt\u00e9n tu enlace', step2Desc: 'Tu sitio web se despliega al instante y recibes una URL \u00fanica para compartir.',
@@ -1945,6 +1969,7 @@
         uploadFailed: '\u00c9chec de l\u2019envoi',
         tryAgain: 'R\u00e9essayer',
         uploadHint: '<span>.html</span> ou <span>.zip</span> &middot; Max. <span>50 Mo</span>',
+        accessHint: 'Besoin d\u2019acc\u00e8s ? \u00c9crivez-moi \u2014 <a href="./imprint">adresse dans les mentions l\u00e9gales</a>.',
         howItWorks: 'Comment \u00c7a Marche',
         step1Title: 'D\u00e9posez votre fichier', step1Desc: 'Glissez-d\u00e9posez un fichier HTML ou une archive ZIP sur la zone d\u2019envoi.',
         step2Title: 'Obtenez votre lien', step2Desc: 'Votre site est d\u00e9ploy\u00e9 instantan\u00e9ment et vous recevez une URL unique.',
@@ -2008,6 +2033,7 @@
         uploadFailed: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438',
         tryAgain: '\u041f\u043e\u043f\u0440\u043e\u0431\u043e\u0432\u0430\u0442\u044c \u0441\u043d\u043e\u0432\u0430',
         uploadHint: '<span>.html</span> \u0438\u043b\u0438 <span>.zip</span> &middot; \u041c\u0430\u043a\u0441. <span>50 \u041c\u0411</span>',
+        accessHint: '\u041d\u0443\u0436\u0435\u043d \u0434\u043e\u0441\u0442\u0443\u043f? \u041d\u0430\u043f\u0438\u0448\u0438\u0442\u0435 \u043c\u043d\u0435 \u2014 <a href="./imprint">\u0430\u0434\u0440\u0435\u0441 \u0432 \u0438\u043c\u043f\u0440\u0435\u0441\u0441\u0443\u043c\u0435</a>.',
         howItWorks: '\u041a\u0430\u043a \u042d\u0442\u043e \u0420\u0430\u0431\u043e\u0442\u0430\u0435\u0442',
         step1Title: '\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 \u0444\u0430\u0439\u043b', step1Desc: '\u041f\u0435\u0440\u0435\u0442\u0430\u0449\u0438\u0442\u0435 HTML-\u0444\u0430\u0439\u043b \u0438\u043b\u0438 ZIP-\u0430\u0440\u0445\u0438\u0432 \u0432 \u043e\u0431\u043b\u0430\u0441\u0442\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438.',
         step2Title: '\u041f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u0441\u0441\u044b\u043b\u043a\u0443', step2Desc: '\u0412\u0430\u0448 \u0441\u0430\u0439\u0442 \u043c\u0433\u043d\u043e\u0432\u0435\u043d\u043d\u043e \u0440\u0430\u0437\u0432\u0451\u0440\u043d\u0443\u0442, \u0438 \u0432\u044b \u043f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u0443\u043d\u0438\u043a\u0430\u043b\u044c\u043d\u0443\u044e URL.',
@@ -2071,6 +2097,7 @@
         uploadFailed: '\u4e0a\u4f20\u5931\u8d25',
         tryAgain: '\u91cd\u8bd5',
         uploadHint: '<span>.html</span> \u6216 <span>.zip</span> &middot; \u6700\u5927 <span>50 MB</span>',
+        accessHint: '\u9700\u8981\u8bbf\u95ee\u6743\u9650\uff1f\u8bf7\u901a\u8fc7<a href="./imprint">\u6cd5\u5f8b\u58f0\u660e\u4e2d\u7684\u90ae\u7bb1</a>\u4e0e\u6211\u8054\u7cfb\u3002',
         howItWorks: '\u4f7f\u7528\u65b9\u6cd5',
         step1Title: '\u62d6\u653e\u6587\u4ef6', step1Desc: '\u5c06HTML\u6587\u4ef6\u6216ZIP\u538b\u7f29\u5305\u62d6\u653e\u5230\u4e0a\u4f20\u533a\u57df\u3002',
         step2Title: '\u83b7\u53d6\u94fe\u63a5', step2Desc: '\u60a8\u7684\u7f51\u7ad9\u5373\u65f6\u90e8\u7f72\uff0c\u60a8\u5c06\u83b7\u5f97\u4e00\u4e2a\u552f\u4e00\u7684\u53ef\u5206\u4eabURL\u3002',
@@ -2159,6 +2186,7 @@
 
       // Upload hint
       document.querySelector('.upload-hint').innerHTML = t.uploadHint;
+      if (t.accessHint) document.getElementById('accessHint').innerHTML = t.accessHint;
 
       // How It Works
       const steps = document.querySelectorAll('.step');
