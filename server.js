@@ -91,28 +91,28 @@ const LOCALE_MAP = {
 
 const SEO_META = {
   en: {
-    title: 'HostMyPage — Free Static Website Hosting | Drag & Drop, No Signup',
-    description: 'Host your static website for free in seconds. Drag & drop an HTML file or ZIP — get an instant shareable link. No signup, no Git, no CLI.'
+    title: 'HostMyPage — Invite-Only Static Website Hosting',
+    description: 'Private, password-protected static website hosting. Invite-only to prevent phishing and abuse. Request access via the email in the imprint.'
   },
   de: {
-    title: 'HostMyPage — Kostenloses Hosting für statische Websites | Drag & Drop, keine Anmeldung',
-    description: 'Hoste deine statische Website kostenlos in Sekunden. HTML-Datei oder ZIP per Drag & Drop hochladen — sofort einen teilbaren Link erhalten. Ohne Anmeldung, ohne Git, ohne CLI.'
+    title: 'HostMyPage — Statisches Website-Hosting nur auf Einladung',
+    description: 'Privates, passwortgeschütztes Hosting für statische Websites. Nur auf Einladung, um Phishing und Missbrauch zu verhindern. Zugang per E-Mail im Impressum anfragen.'
   },
   es: {
-    title: 'HostMyPage — Alojamiento gratuito de sitios web estáticos | Arrastra y suelta, sin registro',
-    description: 'Aloja tu sitio web estático gratis en segundos. Arrastra y suelta un archivo HTML o ZIP — obtén un enlace compartible al instante. Sin registro, sin Git, sin CLI.'
+    title: 'HostMyPage — Alojamiento estático solo por invitación',
+    description: 'Alojamiento privado de sitios estáticos protegido por contraseña. Solo por invitación para prevenir phishing y abusos. Solicita acceso por el correo del aviso legal.'
   },
   fr: {
-    title: 'HostMyPage — Hébergement gratuit de sites web statiques | Glisser-déposer, sans inscription',
-    description: 'Hébergez votre site web statique gratuitement en quelques secondes. Glissez-déposez un fichier HTML ou ZIP — obtenez un lien partageable instantanément. Sans inscription, sans Git, sans CLI.'
+    title: 'HostMyPage — Hébergement statique sur invitation',
+    description: 'Hébergement privé de sites statiques protégé par mot de passe. Sur invitation pour prévenir le phishing et les abus. Demandez l’accès via l’e-mail des mentions légales.'
   },
   ru: {
-    title: 'HostMyPage — Бесплатный хостинг статических сайтов | Перетащите файл, без регистрации',
-    description: 'Размещайте статический сайт бесплатно за секунды. Перетащите HTML-файл или ZIP — получите мгновенную ссылку. Без регистрации, без Git, без CLI.'
+    title: 'HostMyPage — Хостинг статических сайтов по приглашению',
+    description: 'Приватный хостинг статических сайтов с защитой паролем. Только по приглашению, чтобы предотвратить фишинг и злоупотребления. Запросите доступ по адресу из импрессума.'
   },
   zh: {
-    title: 'HostMyPage — 免费静态网站托管 | 拖放上传，无需注册',
-    description: '几秒内免费托管您的静态网站。拖放 HTML 文件或 ZIP — 即时获取可分享链接。无需注册，无需 Git，无需 CLI。'
+    title: 'HostMyPage — 仅限邀请的静态网站托管',
+    description: '私密、密码保护的静态网站托管。仅限邀请以防止钓鱼和滥用。请通过法律声明中的邮箱申请访问权限。'
   }
 };
 
