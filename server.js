@@ -96,28 +96,28 @@ const LOCALE_MAP = {
 
 const SEO_META = {
   en: {
-    title: 'HostMyPage — Free Static Website Hosting',
-    description: 'Host your static website for free in seconds. Drag and drop an HTML file or ZIP archive and get an instant shareable link.'
+    title: 'HostMyPage — Instant Static Website Hosting, No Signup',
+    description: 'Put your static website online in seconds. Drag and drop an HTML file or ZIP archive and get a shareable link. No signup, no setup.'
   },
   de: {
-    title: 'HostMyPage — Kostenloses Hosting für statische Websites',
-    description: 'Hoste deine statische Website kostenlos in Sekunden. HTML-Datei oder ZIP per Drag & Drop hochladen — sofort einen teilbaren Link erhalten.'
+    title: 'HostMyPage — Statisches Website-Hosting in Sekunden, ohne Anmeldung',
+    description: 'Bring deine statische Website in Sekunden online. HTML-Datei oder ZIP per Drag & Drop hochladen und sofort einen teilbaren Link erhalten. Ohne Anmeldung, ohne Einrichtung.'
   },
   es: {
-    title: 'HostMyPage — Alojamiento gratuito de sitios web estáticos',
-    description: 'Aloja tu sitio web estático gratis en segundos. Arrastra y suelta un archivo HTML o ZIP — obtén un enlace compartible al instante.'
+    title: 'HostMyPage — Alojamiento web estático al instante, sin registro',
+    description: 'Publica tu sitio web estático en segundos. Arrastra y suelta un archivo HTML o ZIP y obtén un enlace para compartir. Sin registro ni configuración.'
   },
   fr: {
-    title: 'HostMyPage — Hébergement gratuit de sites web statiques',
-    description: 'Hébergez votre site web statique gratuitement en quelques secondes. Glissez-déposez un fichier HTML ou ZIP — obtenez un lien partageable instantanément.'
+    title: 'HostMyPage — Hébergement web statique instantané, sans inscription',
+    description: 'Mettez votre site web statique en ligne en quelques secondes. Glissez-déposez un fichier HTML ou ZIP et obtenez un lien partageable. Sans inscription ni configuration.'
   },
   ru: {
-    title: 'HostMyPage — Бесплатный хостинг статических сайтов',
-    description: 'Размещайте статический сайт бесплатно за секунды. Перетащите HTML-файл или ZIP — получите мгновенную ссылку.'
+    title: 'HostMyPage — Мгновенный хостинг статических сайтов без регистрации',
+    description: 'Разместите статический сайт за секунды. Перетащите HTML-файл или ZIP-архив и получите ссылку. Без регистрации и настройки.'
   },
   zh: {
-    title: 'HostMyPage — 免费静态网站托管',
-    description: '几秒内免费托管您的静态网站。拖放 HTML 文件或 ZIP — 即时获取可分享链接。'
+    title: 'HostMyPage — 即时静态网站托管，无需注册',
+    description: '几秒内让您的静态网站上线。拖放 HTML 文件或 ZIP 压缩包，立即获得分享链接。无需注册，无需配置。'
   }
 };
 

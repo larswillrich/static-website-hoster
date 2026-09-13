@@ -104,7 +104,7 @@ Browser ──POST /upload + X-Credit-Code──▶ site published, one credit u
 ```
 
 - **Only the webhook** marks an order as paid. The success redirect is not trusted.
-- Credit codes are 16 characters (80 bits of randomness), shown as `ABCD-EFGH-JKLM-NPQR`. Users can copy the code from below the upload box to use their remaining uploads on another device.
+- Credit codes are 16 characters (80 bits of randomness), shown as `ABCD-EFGH-JKLM-NPQR`. The code is shown prominently with a copy button after payment and after each upload, and in small print below the upload box. Users enter it under “Have a code?” to use their remaining uploads on another device or browser.
 - The credit is checked before the upload is accepted and used atomically once the site is published. Rejected uploads don't use a credit.
 - Orders live in `data/payments.json`. Mount `/app/data` as a volume.
 
