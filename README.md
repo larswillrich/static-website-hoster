@@ -9,7 +9,7 @@ HostMyPage is a lightweight, self-hosted static website hosting service. Upload 
 - **Instant hosting** — Upload and get a live URL in seconds
 - **Drag-and-drop** — Drop an `.html` or `.zip` file onto the page
 - **ZIP support** — Upload multi-file sites as a ZIP archive (must contain `index.html`)
-- **Pay per upload** — 5 ct per upload, sold as 10 uploads for €0.50 via Stripe Checkout. No accounts: buyers get a credit code
+- **Pay per upload** — 5.9 ct per upload, sold as 10 uploads for €0.59 via Stripe Checkout. No accounts: buyers get a credit code
 - **Admin panel** — Manage and delete hosted sites
 - **Reverse proxy ready** — Configurable `BASE_PATH` for deployment behind a reverse proxy
 - **Docker-first** — Single-container deployment with multi-arch support (amd64 + arm64)
@@ -85,7 +85,7 @@ location /staticwebsite/ {
 ## How It Works
 
 1. A user drops an `.html` file or `.zip` archive onto the landing page
-2. Without upload credits, the user buys 10 uploads for €0.50 in Stripe Checkout (see [Payments](#payments-stripe)). The dropped file is kept in the browser and published right after payment
+2. Without upload credits, the user buys 10 uploads for €0.59 in Stripe Checkout (see [Payments](#payments-stripe)). The dropped file is kept in the browser and published right after payment
 3. The server generates a unique 8-character hex slug (e.g. `a3f1c8e2`)
 4. For HTML files, the file is saved as `index.html` under the slug directory
 5. For ZIP files, the archive is extracted; single-root-folder ZIPs are automatically flattened
@@ -93,7 +93,7 @@ location /staticwebsite/ {
 
 ## Payments (Stripe)
 
-Uploads cost 5 ct each. Because Stripe's minimum charge is €0.50, they are sold as a pack of **10 uploads for €0.50**. The price is defined only on the server (`CREDIT_PACK` in `server.js`); the client never sends an amount.
+Uploads cost 5.9 ct each and are sold as a pack of **10 uploads for €0.59**. Stripe's minimum charge is based on the account's settlement currency: CHF 0.50 for this account, and €0.50 converts to less than that. €0.59 leaves room for exchange rate changes. The price is defined only on the server (`CREDIT_PACK` in `server.js`); the client never sends an amount.
 
 ```
 Browser ──POST /api/checkout──▶ Server: order "pending" in data/payments.json, Stripe Checkout Session

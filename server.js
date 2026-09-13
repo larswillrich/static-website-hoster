@@ -242,8 +242,9 @@ app.use([`${BASE_PATH}/upload`, `${BASE_PATH}/api/checkout`], (req, res, next) =
 
 // --- Payments (Stripe Checkout): uploads are paid with prepaid credits ---
 // The only place the price lives. The client never sends an amount.
-// 10 uploads for €0.50 = 5 ct per upload (Stripe's minimum charge is €0.50).
-const CREDIT_PACK = { name: 'HostMyPage – 10 uploads', amount: 50, currency: 'eur', credits: 10 };
+// 10 uploads for €0.59 = 5.9 ct per upload. The Stripe account settles in CHF, where the minimum
+// charge is CHF 0.50 and €0.50 converts to less than that; €0.59 leaves room for exchange rate changes.
+const CREDIT_PACK = { name: 'HostMyPage – 10 uploads', amount: 59, currency: 'eur', credits: 10 };
 const CREDIT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I to avoid typos
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 
@@ -480,7 +481,7 @@ app.get(`${BASE_PATH}/api/credits`, creditLookupLimiter, (req, res) => {
   res.json({ remaining: order.remaining });
 });
 
-const NO_CREDITS_ERROR = 'No upload credits left. Get 10 uploads for €0.50 to continue.';
+const NO_CREDITS_ERROR = 'No upload credits left. Get 10 uploads for €0.59 to continue.';
 
 // Reject uploads without credit before accepting up to 50 MB. The credit is only used once the site is published.
 function requireUploadCredit(req, res, next) {
