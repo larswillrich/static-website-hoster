@@ -93,7 +93,14 @@
     <ul>
       <li><strong>cookie-consent</strong> (localStorage): Stores your cookie preference ("accepted" or "declined"). This is an essential functional storage and does not require consent.</li>
       <li><strong>Google Analytics cookies</strong> (_ga, _ga_*): Only set after you accept analytics cookies via the consent banner.</li>
+      <li><strong>credit-code</strong> (localStorage): Your upload credit code, so you can use your remaining uploads without entering it again. Required for the service you requested.</li>
+      <li><strong>checkout-session</strong> (localStorage): The ID of your Stripe checkout session while your payment is being confirmed. Removed once the payment is confirmed or has failed.</li>
+      <li><strong>hostmypage</strong> (IndexedDB): Temporarily holds the file you dropped while you are on Stripe's checkout page, so it can be published right after payment. Removed when you return.</li>
     </ul>
+
+    <h3>3.5 Payments</h3>
+    <p>Upload credits are paid through Stripe (Stripe Payments Europe, Ltd., 1 Grand Canal Street Lower, Grand Canal Dock, Dublin, D02 H210, Ireland). You enter your payment details on Stripe's checkout page, so we never receive your card or bank details. For how Stripe processes your data, see <a href="https://stripe.com/privacy" rel="noopener" target="_blank">Stripe's Privacy Policy</a>.</p>
+    <p>On our server we store the order number, amount, payment status, Stripe checkout session ID, your credit code and the number of remaining uploads. We do not store your name, email address or payment details. Legal basis: performance of a contract (Art. 6(1)(b) GDPR).</p>
 
     <h2>4. How we use your data</h2>
     <p>We use the collected data for the following purposes:</p>
@@ -108,6 +115,7 @@
     <p>We do not sell your data. We share data only with:</p>
     <ul>
       <li><strong>Google</strong> (Google Analytics): Only if you consent to analytics cookies</li>
+      <li><strong>Stripe</strong>: Processes payments for upload credits</li>
       <li><strong>Hosting provider</strong>: Our server infrastructure provider processes data as part of hosting the service</li>
       <li><strong>Law enforcement</strong>: If required by law or to protect our legal rights</li>
     </ul>
@@ -116,6 +124,7 @@
     <ul>
       <li><strong>Uploaded websites</strong>: Stored until deleted by the administrator or the service is discontinued</li>
       <li><strong>Server logs</strong>: Deleted after 30 days</li>
+      <li><strong>Payment records</strong>: Paid orders are kept for accounting; unpaid orders are deleted 48 hours after the checkout expired or failed</li>
       <li><strong>Analytics data</strong>: Retained by Google for 14 months</li>
     </ul>
 

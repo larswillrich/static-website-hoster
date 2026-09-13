@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
+const Stripe = require('stripe');
 
 const app = express();
 app.enable('strict routing');
@@ -19,6 +20,10 @@ const SITE_MAX_AGE_DAYS = parseInt(process.env.SITE_MAX_AGE_DAYS) || 30; // Auto
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || ''; // Required for admin panel access
 const REPORTS_DIR = path.join(__dirname, 'data', 'reports');
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, ''); // Optional origin for Stripe redirects, e.g. "http://localhost:3000"
+const PAYMENTS_FILE = path.join(__dirname, 'data', 'payments.json');
 
 // --- Analytics logging (DSGVO-compliant, no cookies, hashed IPs) ---
 for (const dir of [ANALYTICS_DIR, REPORTS_DIR, path.join(__dirname, 'data')]) {
@@ -203,8 +208,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS: allow upload requests from main domain and all language subdomains
-app.use(`${BASE_PATH}/upload`, (req, res, next) => {
+// CORS: allow upload and checkout requests from main domain and all language subdomains
+app.use([`${BASE_PATH}/upload`, `${BASE_PATH}/api/checkout`], (req, res, next) => {
   const origin = req.headers.origin;
   // Build set of allowed origins (main domain + all lang subdomains)
   const allowedOrigins = new Set();
@@ -234,6 +239,259 @@ app.use(`${BASE_PATH}/upload`, (req, res, next) => {
   }
   next();
 });
+
+// --- Payments (Stripe Checkout): uploads are paid with prepaid credits ---
+// The only place the price lives. The client never sends an amount.
+// 10 uploads for €0.50 = 5 ct per upload (Stripe's minimum charge is €0.50).
+const CREDIT_PACK = { name: 'HostMyPage – 10 uploads', amount: 50, currency: 'eur', credits: 10 };
+const CREDIT_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I to avoid typos
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+
+const missingStripeEnv = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'].filter(key => !process.env[key]);
+if (missingStripeEnv.length) {
+  console.warn(`Payments disabled: ${missingStripeEnv.join(' and ')} not set. No upload credits can be bought.`);
+}
+
+// Orders are stored in data/payments.json. All reads and writes are synchronous,
+// so a load-modify-save sequence can never interleave with another request.
+function loadPayments() {
+  if (!fs.existsSync(PAYMENTS_FILE)) return { orders: {} };
+  // Throws on a corrupt file instead of starting empty and wiping everyone's credits
+  return JSON.parse(fs.readFileSync(PAYMENTS_FILE, 'utf-8'));
+}
+
+function savePayments(store) {
+  const tmpFile = `${PAYMENTS_FILE}.tmp`;
+  fs.writeFileSync(tmpFile, JSON.stringify(store));
+  fs.renameSync(tmpFile, PAYMENTS_FILE);
+}
+
+function updateOrder(orderId, fields) {
+  const store = loadPayments();
+  if (!store.orders[orderId]) return;
+  Object.assign(store.orders[orderId], fields, { updatedAt: new Date().toISOString() });
+  savePayments(store);
+}
+
+// 16 characters from a 32-character alphabet = 80 bits. 256 is a multiple of 32, so there is no modulo bias.
+function generateCreditCode() {
+  return Array.from(crypto.randomBytes(16), byte => CREDIT_CODE_ALPHABET[byte % 32]).join('');
+}
+
+function normalizeCreditCode(value) {
+  const code = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^[A-HJ-NP-Z2-9]{16}$/.test(code) ? code : '';
+}
+
+function findPaidOrderByCode(store, code) {
+  if (!code) return undefined;
+  return Object.values(store.orders).find(order => order.paymentStatus === 'completed' && order.code === code);
+}
+
+// Uses one upload credit. Returns the remaining credits, or null if none were left.
+function consumeUploadCredit(code) {
+  const store = loadPayments();
+  const order = findPaidOrderByCode(store, code);
+  if (!order || order.remaining < 1) return null;
+  order.remaining -= 1;
+  order.updatedAt = new Date().toISOString();
+  savePayments(store);
+  return order.remaining;
+}
+
+// Failed orders (expired or declined sessions) are only kept for 48 hours
+function pruneFailedOrders() {
+  const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+  try {
+    const store = loadPayments();
+    const failedIds = Object.keys(store.orders)
+      .filter(id => store.orders[id].paymentStatus === 'failed' && Date.parse(store.orders[id].updatedAt) < cutoff);
+    if (failedIds.length === 0) return;
+    for (const id of failedIds) delete store.orders[id];
+    savePayments(store);
+  } catch (err) {
+    console.error('Payment cleanup error:', err.message);
+  }
+}
+
+pruneFailedOrders();
+setInterval(pruneFailedOrders, 6 * 60 * 60 * 1000);
+
+// Stripe webhook: the ONLY place that marks an order as paid.
+// express.raw keeps the unparsed body, which the signature check needs. No JSON body parser may run before this route.
+const PAID_EVENTS = ['checkout.session.completed', 'checkout.session.async_payment_succeeded'];
+const FAILED_EVENTS = ['checkout.session.async_payment_failed', 'checkout.session.expired'];
+
+app.post(`${BASE_PATH}/api/stripe/webhook`, express.raw({ type: 'application/json' }), (req, res) => {
+  if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(503).end();
+
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.warn('[webhook] invalid signature:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  const isPaidEvent = PAID_EVENTS.includes(event.type);
+  if (!isPaidEvent && !FAILED_EVENTS.includes(event.type)) return res.json({ received: true });
+
+  const session = event.data.object;
+  // Namespaced key: if other apps share the Stripe account, their sessions arrive here too and are ignored
+  const orderId = session.metadata?.hostmypage_order_id;
+
+  try {
+    const store = loadPayments();
+    const order = orderId && store.orders[orderId];
+    if (!order) return res.json({ received: true, ignored: 'not a HostMyPage order' });
+
+    const now = new Date().toISOString();
+    if (isPaidEvent) {
+      // SEPA & co. complete with payment_status "unpaid" and are paid later via async_payment_succeeded.
+      // Stripe can deliver an event more than once, so orders that are already completed are skipped.
+      if (session.payment_status !== 'paid' || order.paymentStatus === 'completed') {
+        return res.json({ received: true });
+      }
+
+      // amount_subtotal is the amount before tax and discounts, so it has to match the catalog price
+      if (session.amount_subtotal !== order.amount || session.currency !== order.currency) {
+        console.error(`[webhook] amount mismatch for order ${orderId}: ${session.amount_subtotal} ${session.currency} != ${order.amount} ${order.currency}`);
+        return res.json({ received: true }); // check manually, don't let Stripe redeliver
+      }
+
+      Object.assign(order, {
+        paymentStatus: 'completed',
+        amountPaid: session.amount_total,
+        code: generateCreditCode(),
+        remaining: order.credits,
+        updatedAt: now,
+      });
+      savePayments(store);
+      console.info(`[webhook] order ${orderId} completed`);
+    } else if (order.paymentStatus === 'pending') {
+      Object.assign(order, { paymentStatus: 'failed', updatedAt: now });
+      savePayments(store);
+      console.info(`[webhook] order ${orderId} failed (${event.type})`);
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error(`[webhook] handling ${event.type} for order ${orderId} failed:`, err.message);
+    res.status(500).end(); // Stripe retries with backoff for up to 3 days
+  }
+});
+
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+  keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many checkout attempts. Please try again later.' });
+  }
+});
+
+const creditLookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
+  keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many requests. Please try again later.' });
+  }
+});
+
+// Create a pending order and a Stripe Checkout Session for one credit pack
+app.post(`${BASE_PATH}/api/checkout`, checkoutLimiter, async (req, res) => {
+  // Without the webhook secret no payment could ever be confirmed, so don't take anyone's money
+  if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(503).json({ error: 'Payments are not available right now.' });
+
+  const now = new Date().toISOString();
+  const order = {
+    id: crypto.randomBytes(8).toString('hex'),
+    amount: CREDIT_PACK.amount,
+    currency: CREDIT_PACK.currency,
+    credits: CREDIT_PACK.credits,
+    paymentStatus: 'pending',
+    sessionId: '',
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    const store = loadPayments();
+    store.orders[order.id] = order;
+    savePayments(store);
+
+    // Return to the origin the buyer came from, where the credit code is stored (never a client-supplied URL)
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const returnUrl = PUBLIC_URL ? `${PUBLIC_URL}${BASE_PATH}/` : langUrl(req.detectedLang, '/', protocol);
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      client_reference_id: order.id,
+      metadata: { hostmypage_order_id: order.id },
+      payment_intent_data: { metadata: { hostmypage_order_id: order.id } },
+      line_items: [{
+        quantity: 1,
+        price_data: {
+          currency: CREDIT_PACK.currency,
+          unit_amount: CREDIT_PACK.amount,
+          product_data: { name: CREDIT_PACK.name },
+        },
+      }],
+      success_url: `${returnUrl}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${returnUrl}?checkout=cancel`,
+      // Before going live with consumers in the EU, see "Going live" in the README:
+      // invoice_creation: { enabled: true },
+      // automatic_tax: { enabled: true },
+      // consent_collection: { terms_of_service: 'required' },
+      // custom_text: { terms_of_service_acceptance: { message: 'Ich stimme zu, dass mit der Ausführung vor Ablauf der Widerrufsfrist begonnen wird, und weiß, dass ich dadurch mein Widerrufsrecht verliere.' } },
+    });
+
+    updateOrder(order.id, { sessionId: session.id });
+    console.info(`[checkout] order ${order.id} → session ${session.id}`);
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (err) {
+    console.error('[checkout] failed:', err.message);
+    try { updateOrder(order.id, { paymentStatus: 'failed' }); } catch {}
+    res.status(500).json({ error: 'Checkout failed. Please try again.' });
+  }
+});
+
+// Payment status for the page Stripe redirects back to. Read-only; the session ID is only known to the buyer.
+app.get(`${BASE_PATH}/api/checkout/status/:sessionId`, creditLookupLimiter, (req, res) => {
+  const { sessionId } = req.params;
+  const order = /^cs_[A-Za-z0-9_]+$/.test(sessionId)
+    && Object.values(loadPayments().orders).find(o => o.sessionId === sessionId);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+  if (order.paymentStatus !== 'completed') return res.json({ paymentStatus: order.paymentStatus });
+  res.json({ paymentStatus: 'completed', code: order.code, remaining: order.remaining });
+});
+
+// Remaining uploads for a credit code (sent as a header so it doesn't end up in URLs or logs)
+app.get(`${BASE_PATH}/api/credits`, creditLookupLimiter, (req, res) => {
+  const order = findPaidOrderByCode(loadPayments(), normalizeCreditCode(req.headers['x-credit-code']));
+  if (!order) return res.status(404).json({ error: 'Unknown credit code.' });
+  res.json({ remaining: order.remaining });
+});
+
+const NO_CREDITS_ERROR = 'No upload credits left. Get 10 uploads for €0.50 to continue.';
+
+// Reject uploads without credit before accepting up to 50 MB. The credit is only used once the site is published.
+function requireUploadCredit(req, res, next) {
+  const code = normalizeCreditCode(req.headers['x-credit-code']);
+  const order = findPaidOrderByCode(loadPayments(), code);
+  if (!order || order.remaining < 1) {
+    return res.status(402).json({ success: false, error: NO_CREDITS_ERROR });
+  }
+  req.creditCode = code;
+  next();
+}
 
 // CSRF token store (in-memory, tokens expire after 10 minutes)
 const csrfTokens = new Map();
@@ -846,7 +1104,7 @@ async function verifyRecaptcha(token) {
 }
 
 // Upload endpoint
-app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req, res) => {
+app.post(`${BASE_PATH}/upload`, uploadLimiter, requireUploadCredit, upload.single('site'), async (req, res) => {
   // CSRF token verification
   const csrfToken = req.body && req.body.csrf_token;
   if (!csrfToken || !csrfTokens.has(csrfToken)) {
@@ -946,6 +1204,13 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
       });
     }
 
+    // Use one credit. Checked again because the code may have been used up while this upload was in flight.
+    const remaining = consumeUploadCredit(req.creditCode);
+    if (remaining === null) {
+      fs.rmSync(siteDir, { recursive: true, force: true });
+      return res.status(402).json({ success: false, error: NO_CREDITS_ERROR });
+    }
+
     // Build the URL (always use main domain, not language subdomains)
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = getMainDomainHost(req);
@@ -961,7 +1226,7 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, upload.single('site'), async (req
       slug
     });
 
-    res.json({ success: true, url, slug });
+    res.json({ success: true, url, slug, remaining });
   } catch (err) {
     console.error('Upload error:', err);
     // Clean up on failure

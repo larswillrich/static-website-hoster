@@ -9,7 +9,7 @@ HostMyPage is a lightweight, self-hosted static website hosting service. Upload 
 - **Instant hosting** — Upload and get a live URL in seconds
 - **Drag-and-drop** — Drop an `.html` or `.zip` file onto the page
 - **ZIP support** — Upload multi-file sites as a ZIP archive (must contain `index.html`)
-- **Zero signup** — No accounts, no authentication for uploaders
+- **Pay per upload** — 5 ct per upload, sold as 10 uploads for €0.50 via Stripe Checkout. No accounts: buyers get a credit code
 - **Admin panel** — Manage and delete hosted sites
 - **Reverse proxy ready** — Configurable `BASE_PATH` for deployment behind a reverse proxy
 - **Docker-first** — Single-container deployment with multi-arch support (amd64 + arm64)
@@ -23,10 +23,15 @@ HostMyPage is a lightweight, self-hosted static website hosting service. Upload 
 docker run -d \
   -p 3000:3000 \
   -v hostmypage-data:/app/uploads \
+  -v hostmypage-state:/app/data \
+  -e STRIPE_SECRET_KEY=sk_live_... \
+  -e STRIPE_WEBHOOK_SECRET=whsec_... \
   ghcr.io/<your-username>/static-website-hoster:latest
 ```
 
 Then open [http://localhost:3000](http://localhost:3000).
+
+> `/app/data` holds `payments.json` with every order and credit code. Without a volume there, all purchased credits are lost on the next deploy.
 
 ### From source
 
@@ -47,6 +52,10 @@ Configuration is done via environment variables:
 |----------|---------|-------------|
 | `PORT` | `3000` | Port the server listens on |
 | `BASE_PATH` | *(empty)* | URL path prefix for running behind a reverse proxy (e.g. `/staticwebsite`) |
+| `STRIPE_SECRET_KEY` | *(empty)* | Stripe secret key (`sk_test_…` / `sk_live_…`). Without it, credits can't be bought and every upload is rejected |
+| `STRIPE_WEBHOOK_SECRET` | *(empty)* | Signing secret of the Stripe webhook endpoint (`whsec_…`) |
+| `PUBLIC_URL` | *(empty)* | Origin Stripe redirects back to, e.g. `http://localhost:3000`. Defaults to `https://[lang.]BASE_DOMAIN` of the current request |
+| `ALLOWED_ORIGIN` | *(empty)* | Extra origin allowed to call `/upload` and `/api/checkout` (needed for local development, e.g. `http://localhost:3000`) |
 
 ### Reverse proxy example
 
@@ -76,10 +85,59 @@ location /staticwebsite/ {
 ## How It Works
 
 1. A user drops an `.html` file or `.zip` archive onto the landing page
-2. The server generates a unique 8-character hex slug (e.g. `a3f1c8e2`)
-3. For HTML files, the file is saved as `index.html` under the slug directory
-4. For ZIP files, the archive is extracted; single-root-folder ZIPs are automatically flattened
-5. The site is immediately available at `{host}/sites/{slug}/`
+2. Without upload credits, the user buys 10 uploads for €0.50 in Stripe Checkout (see [Payments](#payments-stripe)). The dropped file is kept in the browser and published right after payment
+3. The server generates a unique 8-character hex slug (e.g. `a3f1c8e2`)
+4. For HTML files, the file is saved as `index.html` under the slug directory
+5. For ZIP files, the archive is extracted; single-root-folder ZIPs are automatically flattened
+6. After the content scan passes, one upload credit is used and the site is immediately available at `{host}/sites/{slug}/`
+
+## Payments (Stripe)
+
+Uploads cost 5 ct each. Because Stripe's minimum charge is €0.50, they are sold as a pack of **10 uploads for €0.50**. The price is defined only on the server (`CREDIT_PACK` in `server.js`); the client never sends an amount.
+
+```
+Browser ──POST /api/checkout──▶ Server: order "pending" in data/payments.json, Stripe Checkout Session
+Browser ──redirect──▶ Stripe Checkout ──redirect──▶ /?checkout=success&session_id=…
+Stripe ──signed webhook──▶ /api/stripe/webhook: checks signature, payment_status and amount → order "completed", credit code with 10 uploads
+Browser ──GET /api/checkout/status/:sessionId (polling)──▶ credit code, stored in localStorage
+Browser ──POST /upload + X-Credit-Code──▶ site published, one credit used
+```
+
+- **Only the webhook** marks an order as paid. The success redirect is not trusted.
+- Credit codes are 16 characters (80 bits of randomness), shown as `ABCD-EFGH-JKLM-NPQR`. Users can copy the code from below the upload box to use their remaining uploads on another device.
+- The credit is checked before the upload is accepted and used atomically once the site is published. Rejected uploads don't use a credit.
+- Orders live in `data/payments.json`. Mount `/app/data` as a volume.
+
+### Setup
+
+1. **API key:** copy the secret key from <https://dashboard.stripe.com/test/apikeys> into `STRIPE_SECRET_KEY`.
+2. **Payment methods:** enable them under *Settings → Payment methods*. Card payments confirm instantly. Delayed methods such as SEPA Direct Debit only add credits once the payment succeeds (days later), so consider disabling them for this product.
+3. **Webhook:** under *Developers → Webhooks → Add endpoint*, enter `https://<your-domain>{BASE_PATH}/api/stripe/webhook` and select these events:
+   - `checkout.session.completed`
+   - `checkout.session.async_payment_succeeded`
+   - `checkout.session.async_payment_failed`
+   - `checkout.session.expired`
+
+   Copy the signing secret into `STRIPE_WEBHOOK_SECRET` and restart. Test and live mode have separate endpoints and secrets.
+
+### Local testing
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+```
+
+```bash
+STRIPE_SECRET_KEY=sk_test_... STRIPE_WEBHOOK_SECRET=whsec_... PUBLIC_URL=http://localhost:3000 ALLOWED_ORIGIN=http://localhost:3000 npm start
+```
+
+Use the `whsec_…` printed by `stripe listen`. Pay with `4242 4242 4242 4242` (any future date, any CVC); `4000 0025 0000 3155` tests 3-D Secure and `4000 0000 0000 9995` a declined card.
+
+### Going live
+
+- Live secret key and a **separate** live webhook with the four events above
+- Business details, support email, terms and privacy URLs under *Settings → Public details*
+- Selling to consumers in the EU: decide on VAT (`automatic_tax`) and invoices (`invoice_creation`), and collect consent to start the service before the withdrawal period ends (`consent_collection` + `custom_text`). The options are prepared as comments in `POST /api/checkout`
+- Terms of service and privacy policy describe the paid service and Stripe as payment provider
 
 ## API
 
@@ -90,17 +148,19 @@ All endpoints are prefixed with `BASE_PATH` if configured.
 ```
 POST /upload
 Content-Type: multipart/form-data
-Field: site (file)
+X-Credit-Code: ABCD-EFGH-JKLM-NPQR
+Fields: site (file), csrf_token (from GET /api/csrf-token), recaptcha_token
 ```
 
-Accepts `.html`, `.htm`, or `.zip` files up to **50 MB**.
+Accepts `.html`, `.htm`, or `.zip` files up to **50 MB**. Without a credit code that has uploads left, the server answers `402 Payment Required`.
 
 **Response (success):**
 ```json
 {
   "success": true,
   "url": "https://example.com/sites/a3f1c8e2/",
-  "slug": "a3f1c8e2"
+  "slug": "a3f1c8e2",
+  "remaining": 9
 }
 ```
 
@@ -111,6 +171,54 @@ Accepts `.html`, `.htm`, or `.zip` files up to **50 MB**.
   "error": "Your ZIP must contain an index.html at the root level."
 }
 ```
+
+### Buy upload credits
+
+```
+POST /api/checkout
+```
+
+Creates a pending order and a Stripe Checkout Session for 10 uploads. No request body.
+
+**Response:**
+```json
+{
+  "url": "https://checkout.stripe.com/c/pay/cs_test_...",
+  "sessionId": "cs_test_..."
+}
+```
+
+### Payment status
+
+```
+GET /api/checkout/status/:sessionId
+```
+
+**Response:** `{ "paymentStatus": "pending" }`, `{ "paymentStatus": "failed" }` or, once the webhook has confirmed the payment:
+```json
+{
+  "paymentStatus": "completed",
+  "code": "ABCDEFGHJKLMNPQR",
+  "remaining": 10
+}
+```
+
+### Remaining credits
+
+```
+GET /api/credits
+X-Credit-Code: ABCD-EFGH-JKLM-NPQR
+```
+
+**Response:** `{ "remaining": 7 }`, or `404` for an unknown code.
+
+### Stripe webhook
+
+```
+POST /api/stripe/webhook
+```
+
+Called by Stripe only. Requests without a valid `Stripe-Signature` are rejected with `400`.
 
 ### List all sites
 
@@ -179,6 +287,7 @@ It provides an overview of all hosted sites with their URLs, upload timestamps, 
 ├── scripts/
 │   └── generate-og.js     # SVG → PNG conversion for OG image
 ├── uploads/               # Hosted sites (gitignored, mount as volume)
+├── data/                  # payments.json, analytics, abuse reports (gitignored, mount as volume)
 ├── Dockerfile             # Multi-stage Docker build
 ├── package.json
 └── .github/
@@ -203,12 +312,13 @@ The Dockerfile:
 
 ### Persistent storage
 
-Mount `/app/uploads` as a volume to persist hosted sites across container restarts:
+Mount `/app/uploads` (hosted sites) and `/app/data` (orders and credit codes) as volumes to persist them across container restarts:
 
 ```bash
 docker run -d \
   -p 3000:3000 \
-  -v /path/on/host:/app/uploads \
+  -v /path/on/host/uploads:/app/uploads \
+  -v /path/on/host/data:/app/data \
   hostmypage
 ```
 
