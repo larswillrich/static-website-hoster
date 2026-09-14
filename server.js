@@ -23,6 +23,7 @@ const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/+$/, ''); // Optional origin for Stripe redirects, e.g. "http://localhost:3000"
+const SITES_HOST = (process.env.SITES_HOST || '').toLowerCase(); // e.g. "sites.host-my-page.com": uploaded sites get their own origin
 const PAYMENTS_FILE = path.join(__dirname, 'data', 'payments.json');
 
 // --- Analytics logging (DSGVO-compliant, no cookies, hashed IPs) ---
@@ -159,6 +160,26 @@ function getMainDomainHost(req) {
   return host;
 }
 
+// Uploaded sites run arbitrary JavaScript. On their own origin (SITES_HOST) that JavaScript can't read
+// the main site's localStorage (credit codes) or call its API as a same-origin page.
+const SITES_HOSTNAME = SITES_HOST.split(':')[0];
+
+if (!SITES_HOST) {
+  console.warn("SITES_HOST is not set: uploaded sites share the main site's origin, so their scripts can read visitors' credit codes.");
+}
+
+function isSitesHost(req) {
+  const host = (req.headers['x-forwarded-host'] || req.get('host') || '').split(',')[0].trim().split(':')[0].toLowerCase();
+  return Boolean(SITES_HOSTNAME) && host === SITES_HOSTNAME;
+}
+
+function siteUrl(req, slug) {
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  if (SITES_HOST) return `${protocol}://${SITES_HOST}/${slug}/`;
+  // Always the main domain, not a language subdomain
+  return `${protocol}://${getMainDomainHost(req)}${BASE_PATH}/sites/${slug}/`;
+}
+
 // Recursive directory size calculation
 function getDirectorySize(dirPath) {
   let totalSize = 0;
@@ -185,7 +206,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   // CSP for the main landing page (not user-hosted sites)
-  if (!req.path.startsWith(`${BASE_PATH}/sites/`)) {
+  if (!isSitesHost(req) && !req.path.startsWith(`${BASE_PATH}/sites/`)) {
     res.setHeader('Content-Security-Policy',
       "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com https://cdn.jsdelivr.net; " +
       "style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.googletagmanager.com; " +
@@ -193,6 +214,50 @@ app.use((req, res, next) => {
     );
   }
   next();
+});
+
+// Uploaded sites: sandbox headers and pageview logging
+function hostedSiteHeaders(req, res, next) {
+  // Sandbox user-hosted content: restrict capabilities to prevent cross-origin attacks
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none';");
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+
+  // Only log initial page loads (not assets like .css, .js, .png etc.)
+  const ext = path.extname(req.path).toLowerCase();
+  if (!ext || ext === '.html' || ext === '.htm') {
+    const slugMatch = req.path.match(/^\/([0-9a-f]{8})/);
+    if (slugMatch) {
+      logAnalyticsEvent('pageview', {
+        ipHash: hashIP(getClientIP(req)),
+        slug: slugMatch[1],
+        referrer: req.headers['referer'] || req.headers['referrer'] || ''
+      });
+    }
+  }
+  next();
+}
+
+const serveUploadedSites = express.static(UPLOADS_DIR, {
+  extensions: ['html'],
+  index: ['index.html']
+});
+
+// SITES_HOST serves uploaded sites and nothing else: no landing page, no API, no uploads
+app.use((req, res, next) => {
+  if (!isSitesHost(req)) return next();
+  if (req.path === '/robots.txt') {
+    return res.type('text/plain').send('User-agent: *\nDisallow: /\n');
+  }
+  if (!/^\/[0-9a-f]{8}(\/|$)/.test(req.path)) {
+    return res.status(404).send('Not found');
+  }
+  hostedSiteHeaders(req, res, () => {
+    serveUploadedSites(req, res, () => res.status(404).send('Not found'));
+  });
 });
 
 // Subdomain language detection
@@ -1009,14 +1074,9 @@ function generateSlug() {
   return slug;
 }
 
-// Health check (shows if reCAPTCHA is configured, without exposing the key)
+// Health check (public, so it reveals nothing about the configuration)
 app.get(`${BASE_PATH}/api/health`, (req, res) => {
-  res.json({
-    status: 'ok',
-    recaptchaConfigured: !!RECAPTCHA_SECRET_KEY,
-    recaptchaKeyLength: RECAPTCHA_SECRET_KEY.length,
-    envKeys: Object.keys(process.env).filter(k => k.includes('RECAPTCHA')).join(', ') || 'none'
-  });
+  res.json({ status: 'ok' });
 });
 
 // API: List all hosted sites (admin only)
@@ -1033,12 +1093,9 @@ app.get(`${BASE_PATH}/api/sites`, requireAdmin, (req, res) => {
         const dirPath = path.join(UPLOADS_DIR, entry.name);
         const stats = fs.statSync(dirPath);
         const size = getDirectorySize(dirPath);
-        const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-        const host = getMainDomainHost(req);
-        const url = `${protocol}://${host}${BASE_PATH}/sites/${entry.name}/`;
         return {
           slug: entry.name,
-          url,
+          url: siteUrl(req, entry.name),
           createdAt: stats.birthtime.toISOString(),
           size
         };
@@ -1104,29 +1161,38 @@ async function verifyRecaptcha(token) {
   }
 }
 
+// Deletes multer's temp file when an upload is rejected before it was processed
+function removeTempUpload(req) {
+  if (req.file) fs.unlink(req.file.path, () => {});
+}
+
 // Upload endpoint
 app.post(`${BASE_PATH}/upload`, uploadLimiter, requireUploadCredit, upload.single('site'), async (req, res) => {
   // CSRF token verification
   const csrfToken = req.body && req.body.csrf_token;
   if (!csrfToken || !csrfTokens.has(csrfToken)) {
+    removeTempUpload(req);
     return res.status(403).json({ success: false, error: 'Invalid or missing security token. Please reload and try again.' });
   }
   csrfTokens.delete(csrfToken); // Single-use token
 
   // Honeypot check: bots fill hidden fields, real users don't
   if (req.body && req.body.website) {
+    removeTempUpload(req);
     return res.status(400).json({ success: false, error: 'Failed to process uploaded file.' });
   }
 
   // reCAPTCHA v3 verification
   const recaptchaToken = req.body && req.body.recaptcha_token;
   if (RECAPTCHA_SECRET_KEY && !recaptchaToken) {
+    removeTempUpload(req);
     return res.status(400).json({ success: false, error: 'Security verification missing. Please reload and try again.' });
   }
   if (RECAPTCHA_SECRET_KEY) {
     const captchaResult = await verifyRecaptcha(recaptchaToken);
     if (!captchaResult.success || captchaResult.score < 0.5) {
       console.log(`reCAPTCHA rejected: success=${captchaResult.success}, score=${captchaResult.score}`);
+      removeTempUpload(req);
       return res.status(403).json({ success: false, error: 'Security verification failed. Please try again.' });
     }
   }
@@ -1212,10 +1278,7 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, requireUploadCredit, upload.singl
       return res.status(402).json({ success: false, error: NO_CREDITS_ERROR });
     }
 
-    // Build the URL (always use main domain, not language subdomains)
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-    const host = getMainDomainHost(req);
-    const url = `${protocol}://${host}${BASE_PATH}/sites/${slug}/`;
+    const url = siteUrl(req, slug);
 
     // Log upload event (DSGVO-compliant)
     logAnalyticsEvent('upload', {
@@ -1239,33 +1302,12 @@ app.post(`${BASE_PATH}/upload`, uploadLimiter, requireUploadCredit, upload.singl
   }
 });
 
-// Serve hosted static sites with analytics tracking and sandbox headers
+// Hosted sites on the main domain. With SITES_HOST they moved to their own origin; old links redirect there.
 app.use(`${BASE_PATH}/sites`, (req, res, next) => {
-  // Sandbox user-hosted content: restrict capabilities to prevent cross-origin attacks
-  res.setHeader('Content-Security-Policy', "frame-ancestors 'none';");
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-
-  // Only log initial page loads (not assets like .css, .js, .png etc.)
-  const ext = path.extname(req.path).toLowerCase();
-  if (!ext || ext === '.html' || ext === '.htm') {
-    const slugMatch = req.path.match(/^\/([0-9a-f]{8})/);
-    if (slugMatch) {
-      logAnalyticsEvent('pageview', {
-        ipHash: hashIP(getClientIP(req)),
-        slug: slugMatch[1],
-        referrer: req.headers['referer'] || req.headers['referrer'] || ''
-      });
-    }
-  }
-  next();
-}, express.static(UPLOADS_DIR, {
-  extensions: ['html'],
-  index: ['index.html']
-}));
+  if (!SITES_HOST) return next();
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  res.redirect(301, `${protocol}://${SITES_HOST}${req.url}`);
+}, hostedSiteHeaders, serveUploadedSites);
 
 // API: Report abuse for a hosted site (public, rate-limited)
 const reportLimiter = rateLimit({

@@ -56,6 +56,8 @@ Configuration is done via environment variables:
 | `STRIPE_WEBHOOK_SECRET` | *(empty)* | Signing secret of the Stripe webhook endpoint (`whsec_…`) |
 | `PUBLIC_URL` | *(empty)* | Origin Stripe redirects back to, e.g. `http://localhost:3000`. Defaults to `https://[lang.]BASE_DOMAIN` of the current request |
 | `ALLOWED_ORIGIN` | *(empty)* | Extra origin allowed to call `/upload` and `/api/checkout` (needed for local development, e.g. `http://localhost:3000`) |
+| `SITES_HOST` | *(empty)* | Host that serves uploaded sites, e.g. `sites.host-my-page.com`. **Set this in production** (see [Uploaded sites on their own origin](#uploaded-sites-on-their-own-origin)). Without it, sites are served under `/sites/` on the main domain |
+| `ADMIN_TOKEN` | *(empty)* | Token for the admin panel and admin APIs. Without it they are disabled |
 
 ### Reverse proxy example
 
@@ -82,6 +84,28 @@ location /staticwebsite/ {
 }
 ```
 
+### Uploaded sites on their own origin
+
+Uploaded sites contain arbitrary JavaScript. If they run on the same origin as the landing page, that JavaScript can read a visitor's credit code from `localStorage` and upload with it. `SITES_HOST` serves every uploaded site from a separate host instead:
+
+- `https://sites.host-my-page.com/<slug>/` serves the site. That host serves nothing else: no landing page, no API, no uploads.
+- Old links `https://host-my-page.com/sites/<slug>/` redirect there (301).
+- Requests from the sites host to the main API are cross-origin and blocked by the browser.
+
+Setup:
+
+1. DNS: add an `A` record for `sites` pointing to the server (or a `CNAME` to the main domain).
+2. Reverse proxy: route that host to the container. With Traefik, add a router:
+
+   ```yaml
+   - "traefik.http.routers.staticwebsite-sites.rule=Host(`sites.host-my-page.com`)"
+   - traefik.http.routers.staticwebsite-sites.tls=true
+   - traefik.http.routers.staticwebsite-sites.entrypoints=web,websecure
+   - traefik.http.routers.staticwebsite-sites.tls.certresolver=mytlschallenge
+   ```
+
+3. Set `SITES_HOST=sites.host-my-page.com` and restart. Until it is set, the server logs a warning at startup.
+
 ## How It Works
 
 1. A user drops an `.html` file or `.zip` archive onto the landing page
@@ -89,7 +113,7 @@ location /staticwebsite/ {
 3. The server generates a unique 8-character hex slug (e.g. `a3f1c8e2`)
 4. For HTML files, the file is saved as `index.html` under the slug directory
 5. For ZIP files, the archive is extracted; single-root-folder ZIPs are automatically flattened
-6. After the content scan passes, one upload credit is used and the site is immediately available at `{host}/sites/{slug}/`
+6. After the content scan passes, one upload credit is used and the site is immediately available at `https://{SITES_HOST}/{slug}/` (without `SITES_HOST`: `{host}/sites/{slug}/`)
 
 ## Payments (Stripe)
 
@@ -158,7 +182,7 @@ Accepts `.html`, `.htm`, or `.zip` files up to **50 MB**. Without a credit code 
 ```json
 {
   "success": true,
-  "url": "https://example.com/sites/a3f1c8e2/",
+  "url": "https://sites.example.com/a3f1c8e2/",
   "slug": "a3f1c8e2",
   "remaining": 9
 }
@@ -232,7 +256,7 @@ GET /api/sites
   "sites": [
     {
       "slug": "a3f1c8e2",
-      "url": "https://example.com/sites/a3f1c8e2/",
+      "url": "https://sites.example.com/a3f1c8e2/",
       "createdAt": "2025-03-01T12:00:00.000Z",
       "size": 15360
     }
@@ -256,10 +280,10 @@ DELETE /api/sites/:slug
 ### Access a hosted site
 
 ```
-GET /sites/:slug/
+GET https://{SITES_HOST}/:slug/
 ```
 
-Serves static files from the uploaded site with `index.html` as the default document.
+Serves static files from the uploaded site with `index.html` as the default document. Without `SITES_HOST` the site is served at `GET /sites/:slug/`; with it, that path redirects to the sites host.
 
 ## Admin Panel
 
@@ -271,7 +295,7 @@ The admin panel is accessible at a hidden URL:
 
 It provides an overview of all hosted sites with their URLs, upload timestamps, sizes, and a delete button for each site.
 
-> **Note:** The admin panel has no authentication and relies on the obscurity of the URL. For production use, consider restricting access at the reverse proxy level.
+> **Note:** The admin panel and admin APIs require `ADMIN_TOKEN` (`?token=…` or `X-Admin-Token` header). Keep the link private.
 
 ## Project Structure
 
@@ -354,8 +378,11 @@ The GitHub Actions workflow (`.github/workflows/docker-publish.yml`) automatical
 - Slug validation prevents directory traversal (`/^[0-9a-f]{8}$/`)
 - `X-Content-Type-Options: nosniff` header prevents MIME type sniffing
 - Strict routing enabled to prevent redirect-based bypasses
-- Temporary upload files are cleaned up after processing or on error
-- Admin panel is not authenticated — restrict access via reverse proxy in production
+- Temporary upload files are cleaned up after processing, on error and when an upload is rejected
+- Uploaded sites run on their own origin (`SITES_HOST`), so their scripts can't read credit codes or call the API
+- Uploads require a paid credit code, checked before the file is accepted and used atomically after publishing
+- Credits are only issued by the signature-verified Stripe webhook
+- Admin panel and admin APIs require `ADMIN_TOKEN`
 
 ## License
 
