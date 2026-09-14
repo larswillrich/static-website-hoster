@@ -1132,16 +1132,18 @@ app.delete(`${BASE_PATH}/api/sites/:slug`, requireAdmin, (req, res) => {
   }
 });
 
-// Rate limiting for uploads: 5 requests per 15 minutes per IP
+// Rate limiting for uploads: 20 failed attempts per 15 minutes per IP. Successful uploads are paid for,
+// so they don't count and buyers can use all their credits in one go.
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 20,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
   keyGenerator: (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip,
   handler: (req, res) => {
-    res.status(429).json({ success: false, error: 'Too many uploads. Please try again later.' });
+    res.status(429).json({ success: false, error: 'Too many failed uploads. Please try again later.' });
   }
 });
 
@@ -1167,7 +1169,9 @@ function removeTempUpload(req) {
 }
 
 // Upload endpoint
-app.post(`${BASE_PATH}/upload`, uploadLimiter, requireUploadCredit, upload.single('site'), async (req, res) => {
+// Order matters: without a paid credit the answer is always 402 (the page asks for payment), never a rate limit.
+// creditLookupLimiter only stops floods; uploadLimiter only applies to attempts with a valid credit.
+app.post(`${BASE_PATH}/upload`, creditLookupLimiter, requireUploadCredit, uploadLimiter, upload.single('site'), async (req, res) => {
   // CSRF token verification
   const csrfToken = req.body && req.body.csrf_token;
   if (!csrfToken || !csrfTokens.has(csrfToken)) {
