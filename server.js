@@ -19,6 +19,7 @@ const MAX_ZIP_FILES = 500; // Max files in a ZIP archive
 const SITE_MAX_AGE_DAYS = parseInt(process.env.SITE_MAX_AGE_DAYS) || 30; // Auto-expiry
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || ''; // Required for admin panel access
 const REPORTS_DIR = path.join(__dirname, 'data', 'reports');
+const SITES_META_DIR = path.join(__dirname, 'data', 'sites-meta'); // Delete token per site, never web-served
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || '';
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
@@ -27,7 +28,7 @@ const SITES_HOST = (process.env.SITES_HOST || '').toLowerCase(); // e.g. "sites.
 const PAYMENTS_FILE = path.join(__dirname, 'data', 'payments.json');
 
 // --- Analytics logging (DSGVO-compliant, no cookies, hashed IPs) ---
-for (const dir of [ANALYTICS_DIR, REPORTS_DIR, path.join(__dirname, 'data')]) {
+for (const dir of [ANALYTICS_DIR, REPORTS_DIR, SITES_META_DIR, path.join(__dirname, 'data')]) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -890,6 +891,7 @@ function cleanExpiredSites() {
         const stats = fs.statSync(dirPath);
         if (now - stats.birthtimeMs > maxAge) {
           fs.rmSync(dirPath, { recursive: true, force: true });
+          deleteSiteMeta(entry.name);
           console.log(`Auto-expired site: ${entry.name}`);
         }
       } catch {}
@@ -1125,10 +1127,108 @@ app.delete(`${BASE_PATH}/api/sites/:slug`, requireAdmin, (req, res) => {
 
   try {
     fs.rmSync(siteDir, { recursive: true, force: true });
+    deleteSiteMeta(slug);
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting site:', err);
     res.status(500).json({ error: 'Failed to delete site.' });
+  }
+});
+
+// --- Per-site metadata (delete token), stored in data/, never under the web-served uploads ---
+function saveSiteMeta(slug, meta) {
+  fs.writeFileSync(path.join(SITES_META_DIR, `${slug}.json`), JSON.stringify(meta));
+}
+
+function loadSiteMeta(slug) {
+  try {
+    const raw = fs.readFileSync(path.join(SITES_META_DIR, `${slug}.json`), 'utf-8');
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function deleteSiteMeta(slug) {
+  try { fs.unlinkSync(path.join(SITES_META_DIR, `${slug}.json`)); } catch {}
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
+// Delete link for the uploader. Always on the main domain, never on SITES_HOST.
+function siteDeleteUrl(req, slug, token) {
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  return `${protocol}://${getMainDomainHost(req)}${BASE_PATH}/delete/${slug}/${token}`;
+}
+
+// --- User-facing delete flow (token-based, no admin auth required) ---
+// GET shows a confirmation page. POST actually deletes. Two-step so that link-preview bots
+// (messengers, email clients) cannot accidentally delete sites by prefetching the URL.
+function timingSafeEq(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+function deletePageHtml({ slug, token, mode, message }) {
+  // mode: 'confirm' | 'deleted' | 'error'
+  const body =
+    mode === 'deleted'
+      ? `<h1>Site deleted</h1><p>The site <code>${escapeHtml(slug)}</code> has been permanently removed.</p>`
+      : mode === 'error'
+      ? `<h1>Link no longer valid</h1><p>${escapeHtml(message || 'This delete link is invalid or the site has already been removed.')}</p>`
+      : `<h1>Delete this site?</h1>
+         <p>You're about to permanently delete <code>${escapeHtml(slug)}</code>. This cannot be undone.</p>
+         <form method="POST" action="${BASE_PATH}/delete/${escapeHtml(slug)}/${escapeHtml(token)}">
+           <button type="submit" class="danger">Yes, delete it</button>
+           <a class="cancel" href="${BASE_PATH}/">Cancel</a>
+         </form>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Delete site — HostMyPage</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0e0e11;color:#eaeaea;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:#16161a;border:1px solid #2a2a30;border-radius:16px;padding:36px;max-width:480px;text-align:center}
+  h1{font-size:22px;margin:0 0 14px}
+  p{color:#bbb;line-height:1.6}
+  code{background:#0a0a0c;padding:2px 8px;border-radius:6px;color:#e8793a}
+  button.danger{background:#c33;color:#fff;border:0;padding:12px 24px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;margin-right:12px}
+  button.danger:hover{background:#a22}
+  a.cancel{color:#888;text-decoration:none;padding:12px 16px}
+  a.cancel:hover{color:#fff}
+</style></head><body><div class="card">${body}</div></body></html>`;
+}
+
+function validDeleteRequest(slug, token) {
+  if (!/^[0-9a-f]{8}$/.test(slug) || !/^[0-9a-f]{64}$/.test(token)) return false;
+  const meta = loadSiteMeta(slug);
+  return Boolean(meta) && timingSafeEq(meta.deleteToken, token);
+}
+
+app.get(`${BASE_PATH}/delete/:slug/:token`, (req, res) => {
+  const { slug, token } = req.params;
+  if (!validDeleteRequest(slug, token)) {
+    return res.status(404).type('html').send(deletePageHtml({ slug: '', token: '', mode: 'error' }));
+  }
+  res.type('html').send(deletePageHtml({ slug, token, mode: 'confirm' }));
+});
+
+app.post(`${BASE_PATH}/delete/:slug/:token`, (req, res) => {
+  const { slug, token } = req.params;
+  if (!validDeleteRequest(slug, token)) {
+    return res.status(404).type('html').send(deletePageHtml({ slug: '', token: '', mode: 'error' }));
+  }
+  const siteDir = path.join(UPLOADS_DIR, slug);
+  try {
+    if (fs.existsSync(siteDir)) fs.rmSync(siteDir, { recursive: true, force: true });
+    deleteSiteMeta(slug);
+    console.log(`User-initiated delete: slug ${slug}`);
+    res.type('html').send(deletePageHtml({ slug, token: '', mode: 'deleted' }));
+  } catch (err) {
+    console.error('User delete error:', err.message);
+    res.status(500).type('html').send(deletePageHtml({ slug, token: '', mode: 'error', message: 'Could not delete the site. Please try again.' }));
   }
 });
 
@@ -1275,14 +1375,20 @@ app.post(`${BASE_PATH}/upload`, creditLookupLimiter, requireUploadCredit, upload
       });
     }
 
+    // Private delete link for the uploader. The token lives in data/, outside the web-served uploads.
+    const deleteToken = crypto.randomBytes(32).toString('hex');
+    saveSiteMeta(slug, { deleteToken, createdAt: new Date().toISOString() });
+
     // Use one credit. Checked again because the code may have been used up while this upload was in flight.
     const remaining = consumeUploadCredit(req.creditCode);
     if (remaining === null) {
       fs.rmSync(siteDir, { recursive: true, force: true });
+      deleteSiteMeta(slug);
       return res.status(402).json({ success: false, error: NO_CREDITS_ERROR });
     }
 
     const url = siteUrl(req, slug);
+    const deleteUrl = siteDeleteUrl(req, slug, deleteToken);
 
     // Log upload event (DSGVO-compliant)
     logAnalyticsEvent('upload', {
@@ -1294,13 +1400,14 @@ app.post(`${BASE_PATH}/upload`, creditLookupLimiter, requireUploadCredit, upload
       slug
     });
 
-    res.json({ success: true, url, slug, remaining });
+    res.json({ success: true, url, deleteUrl, slug, remaining });
   } catch (err) {
     console.error('Upload error:', err);
     // Clean up on failure
     if (fs.existsSync(siteDir)) {
       fs.rmSync(siteDir, { recursive: true, force: true });
     }
+    deleteSiteMeta(slug);
     try { fs.unlinkSync(req.file.path); } catch {}
     res.status(400).json({ success: false, error: 'Failed to process uploaded file.' });
   }

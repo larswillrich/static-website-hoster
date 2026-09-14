@@ -183,6 +183,7 @@ Accepts `.html`, `.htm`, or `.zip` files up to **50 MB**. Without a credit code 
 {
   "success": true,
   "url": "https://sites.example.com/a3f1c8e2/",
+  "deleteUrl": "https://example.com/delete/a3f1c8e2/<64-character token>",
   "slug": "a3f1c8e2",
   "remaining": 9
 }
@@ -195,6 +196,15 @@ Accepts `.html`, `.htm`, or `.zip` files up to **50 MB**. Without a credit code 
   "error": "Your ZIP must contain an index.html at the root level."
 }
 ```
+
+### Delete your own site
+
+```
+GET  /delete/:slug/:token
+POST /delete/:slug/:token
+```
+
+Every successful upload returns a private `deleteUrl`, and the page shows it next to the site link. `GET` only shows a confirmation page, so link previews in messengers or email clients can't delete anything; `POST` (the "Yes, delete it" button) deletes the site. The token is stored in `data/sites-meta/<slug>.json`, never under the served uploads.
 
 ### Buy upload credits
 

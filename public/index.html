@@ -587,6 +587,24 @@
       background: rgba(255, 255, 255, 0.02);
     }
 
+    /* Delete link box (result state) */
+    .delete-box {
+      margin-bottom: 16px;
+      text-align: left;
+    }
+
+    .delete-box[hidden] {
+      display: none;
+    }
+
+    .delete-box-row {
+      margin-bottom: 8px;
+    }
+
+    .delete-box-row a {
+      color: var(--text-dim);
+    }
+
     /* Credit code box (result and paid states) */
     .code-box {
       margin-bottom: 16px;
@@ -1393,6 +1411,25 @@
               </svg>
             </button>
           </div>
+          <!-- Private delete link for the uploaded site -->
+          <div class="delete-box" id="deleteBox" hidden>
+            <div class="code-box-head">
+              <span class="code-box-label" id="deleteLinkLabel">Delete link</span>
+            </div>
+            <div class="url-box delete-box-row">
+              <a id="deleteLink" href="#" target="_blank" rel="noopener"></a>
+              <button type="button" class="copy-btn" id="deleteCopyBtn" title="Copy delete link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+                  <polyline points="6 12 10.5 16.5 18 9"/>
+                </svg>
+              </button>
+            </div>
+            <p class="code-box-help" id="deleteLinkHelp">Save this link and keep it private: anyone who has it can delete your site.</p>
+          </div>
           <!-- Credit code, shown while uploads are left (filled by renderCreditBoxes) -->
           <div class="code-box" hidden>
             <div class="code-box-head">
@@ -1700,6 +1737,9 @@
     const resultState = document.getElementById('resultState');
     const resultLink = document.getElementById('resultLink');
     const copyBtn = document.getElementById('copyBtn');
+    const deleteBox = document.getElementById('deleteBox');
+    const deleteLink = document.getElementById('deleteLink');
+    const deleteCopyBtn = document.getElementById('deleteCopyBtn');
     const paidState = document.getElementById('paidState');
     const paidUploadBtn = document.getElementById('paidUploadBtn');
     const codeBoxes = document.querySelectorAll('.code-box');
@@ -1827,7 +1867,7 @@
                 showPayState(t('errNoCredits'));
               } else if (xhr.status >= 200 && xhr.status < 300 && data.success) {
                 setCredits(credits.code, data.remaining);
-                showResult(data.url);
+                showResult(data.url, data.deleteUrl);
               } else {
                 showError(data.error || t('errGeneric'));
               }
@@ -1867,9 +1907,14 @@
       payBtn.textContent = t(isBusy ? 'payRedirecting' : 'payButton');
     }
 
-    function showResult(url) {
+    function showResult(url, deleteUrl) {
       resultLink.href = url;
       resultLink.textContent = url;
+      deleteBox.hidden = !deleteUrl;
+      if (deleteUrl) {
+        deleteLink.href = deleteUrl;
+        deleteLink.textContent = deleteUrl;
+      }
       showState('result');
     }
 
@@ -2133,6 +2178,11 @@
       flashCopied(copyBtn);
     });
 
+    deleteCopyBtn.addEventListener('click', async () => {
+      await copyText(deleteLink.href);
+      flashCopied(deleteCopyBtn);
+    });
+
     newUploadBtn.addEventListener('click', resetToIdle);
     paidUploadBtn.addEventListener('click', resetToIdle);
     retryBtn.addEventListener('click', resetToIdle);
@@ -2190,6 +2240,9 @@
         resultTitle: 'Your site is live',
         resultSubtitle: 'Anyone with the link can view it',
         uploadAnother: 'Upload another',
+        deleteLinkLabel: 'Delete link',
+        deleteLinkHelp: 'Save this link and keep it private: anyone who has it can delete your site.',
+        deleteCopyTitle: 'Copy delete link',
         uploadFailed: 'Upload failed',
         tryAgain: 'Try again',
         uploadHint: '<span>.html</span> or <span>.zip</span> &middot; Max <span>50 MB</span>',
@@ -2275,6 +2328,9 @@
         resultTitle: 'Deine Seite ist online',
         resultSubtitle: 'Jeder mit dem Link kann sie ansehen',
         uploadAnother: 'Weitere hochladen',
+        deleteLinkLabel: 'L\u00f6sch-Link',
+        deleteLinkHelp: 'Speichere diesen Link und gib ihn nicht weiter: Wer ihn hat, kann deine Seite l\u00f6schen.',
+        deleteCopyTitle: 'L\u00f6sch-Link kopieren',
         uploadFailed: 'Upload fehlgeschlagen',
         tryAgain: 'Erneut versuchen',
         uploadHint: '<span>.html</span> oder <span>.zip</span> &middot; Max. <span>50 MB</span>',
@@ -2360,6 +2416,9 @@
         resultTitle: 'Tu sitio est\u00e1 en l\u00ednea',
         resultSubtitle: 'Cualquiera con el enlace puede verlo',
         uploadAnother: 'Subir otro',
+        deleteLinkLabel: 'Enlace para eliminar',
+        deleteLinkHelp: 'Guarda este enlace y no lo compartas: quien lo tenga puede eliminar tu sitio.',
+        deleteCopyTitle: 'Copiar enlace para eliminar',
         uploadFailed: 'Error al subir',
         tryAgain: 'Intentar de nuevo',
         uploadHint: '<span>.html</span> o <span>.zip</span> &middot; M\u00e1x. <span>50 MB</span>',
@@ -2445,6 +2504,9 @@
         resultTitle: 'Votre site est en ligne',
         resultSubtitle: 'Toute personne avec le lien peut le voir',
         uploadAnother: 'Envoyer un autre',
+        deleteLinkLabel: 'Lien de suppression',
+        deleteLinkHelp: 'Conservez ce lien et gardez-le priv\u00e9 : toute personne qui l\u2019a peut supprimer votre site.',
+        deleteCopyTitle: 'Copier le lien de suppression',
         uploadFailed: '\u00c9chec de l\u2019envoi',
         tryAgain: 'R\u00e9essayer',
         uploadHint: '<span>.html</span> ou <span>.zip</span> &middot; Max. <span>50 Mo</span>',
@@ -2530,6 +2592,9 @@
         resultTitle: '\u0412\u0430\u0448 \u0441\u0430\u0439\u0442 \u043e\u043d\u043b\u0430\u0439\u043d',
         resultSubtitle: '\u041b\u044e\u0431\u043e\u0439, \u0443 \u043a\u043e\u0433\u043e \u0435\u0441\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0430, \u043c\u043e\u0436\u0435\u0442 \u0435\u0433\u043e \u0443\u0432\u0438\u0434\u0435\u0442\u044c',
         uploadAnother: '\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0435\u0449\u0451',
+        deleteLinkLabel: '\u0421\u0441\u044b\u043b\u043a\u0430 \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f',
+        deleteLinkHelp: '\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u0435 \u044d\u0442\u0443 \u0441\u0441\u044b\u043b\u043a\u0443 \u0438 \u043d\u0438\u043a\u043e\u043c\u0443 \u0435\u0451 \u043d\u0435 \u043f\u0435\u0440\u0435\u0434\u0430\u0432\u0430\u0439\u0442\u0435: \u043b\u044e\u0431\u043e\u0439, \u0443 \u043a\u043e\u0433\u043e \u043e\u043d\u0430 \u0435\u0441\u0442\u044c, \u043c\u043e\u0436\u0435\u0442 \u0443\u0434\u0430\u043b\u0438\u0442\u044c \u0432\u0430\u0448 \u0441\u0430\u0439\u0442.',
+        deleteCopyTitle: '\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0443 \u0434\u043b\u044f \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u044f',
         uploadFailed: '\u041e\u0448\u0438\u0431\u043a\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438',
         tryAgain: '\u041f\u043e\u043f\u0440\u043e\u0431\u043e\u0432\u0430\u0442\u044c \u0441\u043d\u043e\u0432\u0430',
         uploadHint: '<span>.html</span> \u0438\u043b\u0438 <span>.zip</span> &middot; \u041c\u0430\u043a\u0441. <span>50 \u041c\u0411</span>',
@@ -2615,6 +2680,9 @@
         resultTitle: '\u60a8\u7684\u7f51\u7ad9\u5df2\u4e0a\u7ebf',
         resultSubtitle: '\u4efb\u4f55\u4eba\u90fd\u53ef\u4ee5\u901a\u8fc7\u94fe\u63a5\u8bbf\u95ee',
         uploadAnother: '\u4e0a\u4f20\u53e6\u4e00\u4e2a',
+        deleteLinkLabel: '\u5220\u9664\u94fe\u63a5',
+        deleteLinkHelp: '\u8bf7\u4fdd\u5b58\u6b64\u94fe\u63a5\u5e76\u59a5\u5584\u4fdd\u7ba1\uff1a\u4efb\u4f55\u62e5\u6709\u8be5\u94fe\u63a5\u7684\u4eba\u90fd\u53ef\u4ee5\u5220\u9664\u60a8\u7684\u7f51\u7ad9\u3002',
+        deleteCopyTitle: '\u590d\u5236\u5220\u9664\u94fe\u63a5',
         uploadFailed: '\u4e0a\u4f20\u5931\u8d25',
         tryAgain: '\u91cd\u8bd5',
         uploadHint: '<span>.html</span> \u6216 <span>.zip</span> &middot; \u6700\u5927 <span>50 MB</span>',
@@ -2729,6 +2797,9 @@
       document.querySelector('.result-title').textContent = t.resultTitle;
       document.querySelector('.result-subtitle').textContent = t.resultSubtitle;
       newUploadBtn.textContent = t.uploadAnother;
+      document.getElementById('deleteLinkLabel').textContent = t.deleteLinkLabel;
+      document.getElementById('deleteLinkHelp').textContent = t.deleteLinkHelp;
+      deleteCopyBtn.title = t.deleteCopyTitle;
 
       // Paid state
       document.getElementById('paidTitle').textContent = t.paidTitle;
