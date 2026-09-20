@@ -350,6 +350,27 @@ function normalizeCreditCode(value) {
   return /^[A-HJ-NP-Z2-9]{16}$/.test(code) ? code : '';
 }
 
+// --- Owner key: one credit code for the operator of this site that never runs out ---
+// OWNER_CREDIT_CODE holds a code in the same format as a bought one, so it works everywhere a bought
+// code works: in the "Have a code?" box, in /api/credits and in the X-Credit-Code upload header.
+// It is never stored in payments.json and never consumed. Unset (or malformed) = no owner key.
+const OWNER_CREDIT_CODE = normalizeCreditCode(process.env.OWNER_CREDIT_CODE);
+const OWNER_CREDITS_REMAINING = 999999; // reported instead of a real balance; the page shows "unlimited"
+if (process.env.OWNER_CREDIT_CODE && !OWNER_CREDIT_CODE) {
+  console.warn('OWNER_CREDIT_CODE is not a valid credit code (16 characters from A-HJ-NP-Z2-9). The owner key is disabled.');
+} else if (OWNER_CREDIT_CODE) {
+  console.info('Owner key enabled: uploads with that code are unlimited and free.');
+}
+
+function isOwnerCode(code) {
+  return Boolean(OWNER_CREDIT_CODE) && timingSafeEq(code, OWNER_CREDIT_CODE);
+}
+
+// Lets the rate limiters wave the owner through before any per-IP counting
+function ownerRequest(req) {
+  return isOwnerCode(normalizeCreditCode(req.headers['x-credit-code']));
+}
+
 function findPaidOrderByCode(store, code) {
   if (!code) return undefined;
   return Object.values(store.orders).find(order => order.paymentStatus === 'completed' && order.code === code);
@@ -357,6 +378,7 @@ function findPaidOrderByCode(store, code) {
 
 // Uses one upload credit. Returns the remaining credits, or null if none were left.
 function consumeUploadCredit(code) {
+  if (isOwnerCode(code)) return OWNER_CREDITS_REMAINING; // the owner key is never used up
   const store = loadPayments();
   const order = findPaidOrderByCode(store, code);
   if (!order || order.remaining < 1) return null;
@@ -463,6 +485,7 @@ const checkoutLimiter = rateLimit({
 const creditLookupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
+  skip: ownerRequest,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
@@ -542,7 +565,9 @@ app.get(`${BASE_PATH}/api/checkout/status/:sessionId`, creditLookupLimiter, (req
 
 // Remaining uploads for a credit code (sent as a header so it doesn't end up in URLs or logs)
 app.get(`${BASE_PATH}/api/credits`, creditLookupLimiter, (req, res) => {
-  const order = findPaidOrderByCode(loadPayments(), normalizeCreditCode(req.headers['x-credit-code']));
+  const code = normalizeCreditCode(req.headers['x-credit-code']);
+  if (isOwnerCode(code)) return res.json({ remaining: OWNER_CREDITS_REMAINING, unlimited: true });
+  const order = findPaidOrderByCode(loadPayments(), code);
   if (!order) return res.status(404).json({ error: 'Unknown credit code.' });
   res.json({ remaining: order.remaining });
 });
@@ -552,9 +577,11 @@ const NO_CREDITS_ERROR = 'No upload credits left. Get 10 uploads for €0.59 to 
 // Reject uploads without credit before accepting up to 50 MB. The credit is only used once the site is published.
 function requireUploadCredit(req, res, next) {
   const code = normalizeCreditCode(req.headers['x-credit-code']);
-  const order = findPaidOrderByCode(loadPayments(), code);
-  if (!order || order.remaining < 1) {
-    return res.status(402).json({ success: false, error: NO_CREDITS_ERROR });
+  if (!isOwnerCode(code)) {
+    const order = findPaidOrderByCode(loadPayments(), code);
+    if (!order || order.remaining < 1) {
+      return res.status(402).json({ success: false, error: NO_CREDITS_ERROR });
+    }
   }
   req.creditCode = code;
   next();
@@ -1238,6 +1265,7 @@ const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   skipSuccessfulRequests: true,
+  skip: ownerRequest,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false, keyGeneratorIpFallback: false },
@@ -1400,7 +1428,7 @@ app.post(`${BASE_PATH}/upload`, creditLookupLimiter, requireUploadCredit, upload
       slug
     });
 
-    res.json({ success: true, url, deleteUrl, slug, remaining });
+    res.json({ success: true, url, deleteUrl, slug, remaining, unlimited: isOwnerCode(req.creditCode) });
   } catch (err) {
     console.error('Upload error:', err);
     // Clean up on failure

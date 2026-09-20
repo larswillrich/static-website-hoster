@@ -58,6 +58,7 @@ Configuration is done via environment variables:
 | `ALLOWED_ORIGIN` | *(empty)* | Extra origin allowed to call `/upload` and `/api/checkout` (needed for local development, e.g. `http://localhost:3000`) |
 | `SITES_HOST` | *(empty)* | Host that serves uploaded sites, e.g. `sites.host-my-page.com`. **Set this in production** (see [Uploaded sites on their own origin](#uploaded-sites-on-their-own-origin)). Without it, sites are served under `/sites/` on the main domain |
 | `ADMIN_TOKEN` | *(empty)* | Token for the admin panel and admin APIs. Without it they are disabled |
+| `OWNER_CREDIT_CODE` | *(empty)* | A credit code for the site's owner that never runs out (see [Owner key](#owner-key)). Without it, every upload has to be paid for |
 
 ### Reverse proxy example
 
@@ -106,6 +107,33 @@ Setup:
 
 3. Set `SITES_HOST=sites.host-my-page.com` and restart. Until it is set, the server logs a warning at startup.
 
+### Owner key
+
+`OWNER_CREDIT_CODE` is one credit code for the operator of the site. It works exactly like a bought
+code — enter it once under “Have a code?”, or send it as `X-Credit-Code` — but it is never used up
+and never expires. The page then shows “Unlimited uploads” instead of a countdown, and the rate
+limits for uploads and credit lookups don't apply to it.
+
+It must have the same format as a bought code: 16 characters from `A-HJ-NP-Z2-9` (no `I`, `O`, `0`,
+`1`). Generate one:
+
+```bash
+node -e "const c=require('crypto'),A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';console.log(Array.from(c.randomBytes(16),b=>A[b%32]).join(''))"
+```
+
+Then pass it to the container and restart:
+
+```bash
+docker run -d \
+  -p 3000:3000 \
+  -e OWNER_CREDIT_CODE=ABCDEFGHJKLMNPQR \
+  ...
+```
+
+Anyone who has this code can upload for free, so keep it out of the repository and out of screenshots.
+It is never written to `data/payments.json`; to revoke it, change the variable and restart.
+A malformed value is ignored and logged as a warning at startup.
+
 ## How It Works
 
 1. A user drops an `.html` file or `.zip` archive onto the landing page
@@ -131,6 +159,7 @@ Browser ──POST /upload + X-Credit-Code──▶ site published, one credit u
 - Credit codes are 16 characters (80 bits of randomness), shown as `ABCD-EFGH-JKLM-NPQR`. The code is shown prominently with a copy button after payment and after each upload, and in small print below the upload box. Users enter it under “Have a code?” to use their remaining uploads on another device or browser.
 - The credit is checked before the upload is accepted and used atomically once the site is published. Rejected uploads don't use a credit.
 - Orders live in `data/payments.json`. Mount `/app/data` as a volume.
+- `OWNER_CREDIT_CODE` is the one code that isn't bought and is never used up — see [Owner key](#owner-key).
 
 ### Setup
 
@@ -185,7 +214,8 @@ Accepts `.html`, `.htm`, or `.zip` files up to **50 MB**. Without a credit code 
   "url": "https://sites.example.com/a3f1c8e2/",
   "deleteUrl": "https://example.com/delete/a3f1c8e2/<64-character token>",
   "slug": "a3f1c8e2",
-  "remaining": 9
+  "remaining": 9,
+  "unlimited": false
 }
 ```
 
@@ -244,7 +274,8 @@ GET /api/credits
 X-Credit-Code: ABCD-EFGH-JKLM-NPQR
 ```
 
-**Response:** `{ "remaining": 7 }`, or `404` for an unknown code.
+**Response:** `{ "remaining": 7 }`, or `404` for an unknown code. The owner key answers
+`{ "remaining": 999999, "unlimited": true }`.
 
 ### Stripe webhook
 
@@ -391,7 +422,8 @@ The GitHub Actions workflow (`.github/workflows/docker-publish.yml`) automatical
 - Temporary upload files are cleaned up after processing, on error and when an upload is rejected
 - Uploaded sites run on their own origin (`SITES_HOST`), so their scripts can't read credit codes or call the API
 - Uploads require a paid credit code, checked before the file is accepted and used atomically after publishing
-- Credits are only issued by the signature-verified Stripe webhook
+- Credits are only issued by the signature-verified Stripe webhook, with the single exception of `OWNER_CREDIT_CODE`
+- The owner key is compared in constant time and only lives in the environment, never in `data/payments.json`
 - Admin panel and admin APIs require `ADMIN_TOKEN`
 
 ## License

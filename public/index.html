@@ -1750,7 +1750,7 @@
     const retryBtn = document.getElementById('retryBtn');
 
     let pendingFile = null;
-    let credits = { code: storageGet(CREDIT_CODE_KEY), remaining: 0 };
+    let credits = { code: storageGet(CREDIT_CODE_KEY), remaining: 0, unlimited: false };
 
     function storageGet(key) {
       try { return localStorage.getItem(key); } catch { return null; }
@@ -1866,7 +1866,7 @@
                 pendingFile = file;
                 showPayState(t('errNoCredits'));
               } else if (xhr.status >= 200 && xhr.status < 300 && data.success) {
-                setCredits(credits.code, data.remaining);
+                setCredits(credits.code, data);
                 showResult(data.url, data.deleteUrl);
               } else {
                 showError(data.error || t('errGeneric'));
@@ -1929,19 +1929,29 @@
 
     const formatCode = (code) => code.match(/.{1,4}/g).join('-');
 
-    function setCredits(code, remaining) {
-      credits = remaining > 0 ? { code, remaining } : { code: null, remaining: 0 };
+    // info is the server's { remaining, unlimited }, or null when the code is (no longer) usable.
+    // An owner key reports unlimited: it never counts down.
+    function setCredits(code, info) {
+      const remaining = info ? info.remaining : 0;
+      credits = remaining > 0
+        ? { code, remaining, unlimited: Boolean(info.unlimited) }
+        : { code: null, remaining: 0, unlimited: false };
       storageSet(CREDIT_CODE_KEY, credits.code);
       renderCreditHint();
       renderCreditBoxes();
     }
 
-    // Returns the remaining uploads for a code, or null if the server doesn't know the code
+    // How many uploads the current code is good for
+    function creditsText() {
+      return credits.unlimited ? t('creditsUnlimited') : t('creditsLeft').replace('{n}', credits.remaining);
+    }
+
+    // Returns { remaining, unlimited } for a code, or null if the server doesn't know the code
     async function fetchCredits(code) {
       const res = await fetch('./api/credits', { headers: { 'X-Credit-Code': code } });
       if (res.status === 404) return null;
       if (!res.ok) throw new Error(t('errGeneric'));
-      return (await res.json()).remaining;
+      return await res.json();
     }
 
     async function refreshCredits() {
@@ -1977,7 +1987,7 @@
         setTimeout(() => { codeBtn.textContent = display; }, 1500);
       });
       creditHint.textContent = '';
-      creditHint.append(`${t('creditsLeft').replace('{n}', credits.remaining)} · ${t('yourCode')} `, codeBtn);
+      creditHint.append(`${creditsText()} · ${t('yourCode')} `, codeBtn);
     }
 
     // Shows the code prominently after payment and after each upload, so buyers can save it
@@ -1986,7 +1996,7 @@
         box.hidden = !(credits.remaining > 0);
         if (box.hidden) continue;
         box.querySelector('.code-box-label').textContent = t('creditBoxLabel');
-        box.querySelector('.code-box-remaining').textContent = t('creditsLeft').replace('{n}', credits.remaining);
+        box.querySelector('.code-box-remaining').textContent = creditsText();
         box.querySelector('.code-box-value').textContent = formatCode(credits.code);
         box.querySelector('.code-box-copy').title = t('codeCopyTitle');
         box.querySelector('.code-box-help').textContent = t('creditBoxHelp');
@@ -2031,16 +2041,16 @@
       if (!code) return;
       codeSubmit.disabled = true;
       try {
-        const remaining = code.length === 16 ? await fetchCredits(code) : null;
-        if (remaining > 0) {
-          setCredits(code, remaining);
+        const info = code.length === 16 ? await fetchCredits(code) : null;
+        if (info && info.remaining > 0) {
+          setCredits(code, info);
           const file = pendingFile;
           pendingFile = null;
           if (file) startUpload(file); else resetToIdle();
         } else {
           codeInput.classList.add('error', 'shake');
           setTimeout(() => codeInput.classList.remove('shake'), 450);
-          setPayMessage(t(remaining === 0 ? 'errCodeUsedUp' : 'errCodeInvalid'));
+          setPayMessage(t(info ? 'errCodeUsedUp' : 'errCodeInvalid'));
           codeInput.select();
         }
       } catch {
@@ -2107,7 +2117,7 @@
 
       if (status.paymentStatus === 'completed') {
         storageSet(CHECKOUT_SESSION_KEY, null);
-        setCredits(status.code, status.remaining);
+        setCredits(status.code, status);
         const file = await takePendingFile();
         if (justPaid && file) {
           startUpload(file);
@@ -2256,6 +2266,7 @@
         checkingPayment: 'Confirming your payment...',
         priceHint: '5.9 ct per upload \u00b7 10 uploads for \u20ac0.59',
         creditsLeft: 'Uploads left: {n}',
+        creditsUnlimited: 'Unlimited uploads',
         yourCode: 'Code:',
         codeCopyTitle: 'Copy your credit code to use your remaining uploads on another device',
         copied: 'Copied',
@@ -2344,6 +2355,7 @@
         checkingPayment: 'Zahlung wird best\u00e4tigt...',
         priceHint: '5,9 ct pro Upload \u00b7 10 Uploads f\u00fcr 0,59 \u20ac',
         creditsLeft: 'Verbleibende Uploads: {n}',
+        creditsUnlimited: 'Unbegrenzte Uploads',
         yourCode: 'Code:',
         codeCopyTitle: 'Kopiere deinen Code, um die restlichen Uploads auf einem anderen Ger\u00e4t zu nutzen',
         copied: 'Kopiert',
@@ -2432,6 +2444,7 @@
         checkingPayment: 'Confirmando tu pago...',
         priceHint: '5,9 c\u00e9ntimos por subida \u00b7 10 subidas por 0,59 \u20ac',
         creditsLeft: 'Subidas restantes: {n}',
+        creditsUnlimited: 'Subidas ilimitadas',
         yourCode: 'C\u00f3digo:',
         codeCopyTitle: 'Copia tu c\u00f3digo para usar las subidas restantes en otro dispositivo',
         copied: 'Copiado',
@@ -2520,6 +2533,7 @@
         checkingPayment: 'Confirmation du paiement...',
         priceHint: '5,9 centimes par envoi \u00b7 10 envois pour 0,59 \u20ac',
         creditsLeft: 'Envois restants : {n}',
+        creditsUnlimited: 'Envois illimit\u00e9s',
         yourCode: 'Code :',
         codeCopyTitle: 'Copiez votre code pour utiliser vos envois restants sur un autre appareil',
         copied: 'Copi\u00e9',
@@ -2608,6 +2622,7 @@
         checkingPayment: '\u041f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u0435\u043c \u043e\u043f\u043b\u0430\u0442\u0443...',
         priceHint: '5,9 \u0446\u0435\u043d\u0442\u0430 \u0437\u0430 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443 \u00b7 10 \u0437\u0430\u0433\u0440\u0443\u0437\u043e\u043a \u0437\u0430 0,59 \u20ac',
         creditsLeft: '\u041e\u0441\u0442\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u043e\u043a: {n}',
+        creditsUnlimited: '\u0411\u0435\u0437\u043b\u0438\u043c\u0438\u0442\u043d\u044b\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438',
         yourCode: '\u041a\u043e\u0434:',
         codeCopyTitle: '\u0421\u043a\u043e\u043f\u0438\u0440\u0443\u0439\u0442\u0435 \u043a\u043e\u0434, \u0447\u0442\u043e\u0431\u044b \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u043e\u0441\u0442\u0430\u0432\u0448\u0438\u0435\u0441\u044f \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0438 \u043d\u0430 \u0434\u0440\u0443\u0433\u043e\u043c \u0443\u0441\u0442\u0440\u043e\u0439\u0441\u0442\u0432\u0435',
         copied: '\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e',
@@ -2696,6 +2711,7 @@
         checkingPayment: '\u6b63\u5728\u786e\u8ba4\u4ed8\u6b3e...',
         priceHint: '\u6bcf\u6b21\u4e0a\u4f20 5.9 \u6b27\u5206 \u00b7 10 \u6b21\u4e0a\u4f20 \u20ac0.59',
         creditsLeft: '\u5269\u4f59\u4e0a\u4f20\u6b21\u6570\uff1a{n}',
+        creditsUnlimited: '\u4e0d\u9650\u6b21\u6570\u4e0a\u4f20',
         yourCode: '\u5151\u6362\u7801\uff1a',
         codeCopyTitle: '\u590d\u5236\u5151\u6362\u7801\uff0c\u5373\u53ef\u5728\u5176\u4ed6\u8bbe\u5907\u4e0a\u4f7f\u7528\u5269\u4f59\u7684\u4e0a\u4f20\u6b21\u6570',
         copied: '\u5df2\u590d\u5236',
